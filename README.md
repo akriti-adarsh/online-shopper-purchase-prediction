@@ -2,6 +2,8 @@
 
 [![Validate experiment artifacts](https://github.com/akriti-adarsh/online-shopper-purchase-prediction/actions/workflows/validate.yml/badge.svg)](https://github.com/akriti-adarsh/online-shopper-purchase-prediction/actions/workflows/validate.yml)
 
+**Live application: [Open Shopper Signals](https://shopper-signals.streamlit.app/)** · Deployed on Streamlit Community Cloud and verified on **4 November 2026**.
+
 A reproducible comparison of five classifiers for identifying shopping sessions that end in a purchase. The project includes an executed notebook, fitted preprocessing and model pipelines, labeled test data, evaluation tables, visual results, and an interactive Streamlit application.
 
 **Main finding:** the Decision Tree achieves the highest purchase F1 (**0.6167**) on the shared test split, with **0.8921 accuracy**, **0.9129 ROC AUC**, and **0.5585 MCC**. These results describe this experiment; they do not establish performance on future traffic.
@@ -426,7 +428,7 @@ The recorded local validation passed **64 Python tests and 4 browser-component t
 
 Live browser checks confirmed the k-Nearest Neighbors reference results, its 258-row missed-buyer drill-down and export, keyboard session details, valid and feature-only uploads, invalid-upload recovery, five-model MCC comparison, and dark appearance after reload. Layout checks found no page-level horizontal overflow at widths of **360, 390, 768, 1024, and 1440 pixels**. The 390-pixel mobile check also covered settings and detail-dialog bounds, section ordering, and keyboard interaction.
 
-**Verification limits:** the attempted zoom shortcut had no effect in the embedded browser, so **200% zoom remains unverified**. Assistive-technology testing and a complete WCAG audit have not been performed. Cloud deployment is also pending. See the [full validation record](docs/validation.md) for the checked scenarios, exact reference values, and remaining checks.
+**Verification limits:** the attempted zoom shortcut had no effect in the embedded browser, so **200% zoom remains unverified**. Assistive-technology testing and a complete WCAG audit have not been performed. See the [full validation record](docs/validation.md) for the checked local and hosted scenarios, exact reference values, and remaining checks.
 
 ### Interface screenshots
 
@@ -437,11 +439,11 @@ The linked images show local desktop and mobile views in both appearances. Deskt
 | <a href="docs/screenshots/desktop-light.png"><img src="docs/screenshots/desktop-light.png" alt="Shopper Signals desktop overview in light appearance" width="440"></a> | <a href="docs/screenshots/desktop-dark.png"><img src="docs/screenshots/desktop-dark.png" alt="Shopper Signals desktop overview in dark appearance" width="440"></a> |
 | <a href="docs/screenshots/mobile-light.png"><img src="docs/screenshots/mobile-light.png" alt="Shopper Signals mobile overview in light appearance" width="240"></a> | <a href="docs/screenshots/mobile-dark.png"><img src="docs/screenshots/mobile-dark.png" alt="Shopper Signals mobile overview in dark appearance" width="240"></a> |
 
-### Deploy to Streamlit Community Cloud
+### Live deployment
 
-**Deployment status: not yet deployed.** The public application link will be added after deployment and a check of the hosted interface.
+**[Shopper Signals is live at shopper-signals.streamlit.app](https://shopper-signals.streamlit.app/)** on Streamlit Community Cloud. The hosted application was verified on **4 November 2026** using the committed saved models and bundled test set.
 
-Sign in to [Streamlit Community Cloud](https://share.streamlit.io/) and connect the GitHub account that can access this repository. Create an app with these settings:
+The deployment uses the following settings:
 
 | Setting | Value |
 |---|---|
@@ -449,12 +451,17 @@ Sign in to [Streamlit Community Cloud](https://share.streamlit.io/) and connect 
 | Branch | `main` |
 | Main file path | `app.py` |
 | Python version in Advanced settings | `3.12` |
+| Observed hosted runtime | Python `3.12.16`, Streamlit `1.66.0` |
+| Public address | [shopper-signals.streamlit.app](https://shopper-signals.streamlit.app/) |
 
-The app requires no service keys or secrets. After deployment, check all five models with the included test set, test the upload path, and confirm that the public link opens correctly. Streamlit's [official deployment guide](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy) describes the repository and Python-version settings.
+Hosted verification confirmed that all five classifiers render and that the downloaded comparison reproduces **all 30 published metric values at full precision**. The k-Nearest Neighbors missed-buyer drill-down and export contained **258 matching sessions**. Keyboard session details, return focus, valid and feature-only uploads, recovery after an invalid replacement upload, and SVM score labeling passed. Dark appearance persisted after reload; the hosted mobile layout and settings stayed within a 390-pixel viewport. The [hosted validation record](docs/validation.md#streamlit-community-cloud-verification) documents the evidence and scope.
+
+![Hosted Shopper Signals overview](docs/screenshots/hosted-overview.png)
+
+To recreate the deployment, sign in to [Streamlit Community Cloud](https://share.streamlit.io/), connect the GitHub account with access to the repository, and create an app using the settings above. Explicitly select **Python 3.12** in Advanced settings. Install dependencies from the committed `requirements.txt`; no service keys, secrets, separate frontend build, or model retraining are required. After a code update, repeat the hosted checks in the validation record. Streamlit's [official deployment guide](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy) describes the repository and Python-version settings.
 
 ## 11. Remaining submission steps
 
-- Deploy the application, verify its public link, and add that link to this README.
 - Run the assignment in the BITS Virtual Lab and capture the required execution screenshot.
 - Prepare the final PDF in the required order: GitHub repository link, live application link, Virtual Lab screenshot, and complete README content.
 - Submit the PDF through the course portal and confirm the submission is finalized.
