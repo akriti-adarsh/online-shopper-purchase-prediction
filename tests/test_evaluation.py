@@ -1,27 +1,31 @@
 """Regression and upload-validation checks for the purchase evaluation service."""
 
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from copy import deepcopy
+from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 
 from shopper_app.evaluation import (
-    DataValidationError,
     FEATURE_COLUMNS,
     KNOWN_CATEGORIES,
     MAX_BYTES,
     MAX_ROWS,
     MODEL_FILES,
+    DataValidationError,
+    dataset_fingerprint,
     dataset_warnings,
     evaluate_model,
     load_pipeline,
+    model_metadata,
+    purchase_score,
     read_dataset,
+    schema_guide,
 )
-
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -219,6 +223,183 @@ class UploadValidationTests(unittest.TestCase):
             "duplicat" in message.lower() or "repeated rows" in message.lower()
             for message in dataset_warnings(normalized)
         ))
+
+    def test_feature_only_data_is_opt_in_and_partial_targets_are_rejected(self):
+        features = self.frame.drop(columns="Revenue")
+        normalized = read_dataset(csv_bytes(features), require_target=False)
+        self.assertEqual(list(normalized), FEATURE_COLUMNS)
+        self.assertTrue(any("Revenue is absent" in message for message in dataset_warnings(normalized)))
+        with self.assertRaisesRegex(DataValidationError, "Revenue"):
+            read_dataset(csv_bytes(features))
+        partial = self.frame.copy()
+        partial["Revenue"] = partial["Revenue"].astype(object)
+        partial.loc[2, "Revenue"] = ""
+        with self.assertRaisesRegex(DataValidationError, "CSV row 4"):
+            read_dataset(csv_bytes(partial), require_target=False)
+
+    def test_validation_identifies_the_column_and_csv_record(self):
+        frame = self.frame.copy()
+        frame.loc[3, "BounceRates"] = -0.3
+        with self.assertRaisesRegex(DataValidationError, "BounceRates.*CSV row 5"):
+            read_dataset(csv_bytes(frame))
+
+    def test_fingerprint_ignores_formatting_but_tracks_data_and_order(self):
+        original = read_dataset(csv_bytes(self.frame))
+        reordered = self.frame.loc[:, self.frame.columns[::-1]].copy()
+        reordered.columns = [f" {column} " for column in reordered]
+        normalized = read_dataset(b"\xef\xbb\xbf" + csv_bytes(reordered))
+        self.assertEqual(dataset_fingerprint(original), dataset_fingerprint(normalized))
+        self.assertNotEqual(dataset_fingerprint(original), dataset_fingerprint(original.iloc[::-1]))
+        modified = original.copy()
+        modified.loc[0, "PageValues"] += 1
+        self.assertNotEqual(dataset_fingerprint(original), dataset_fingerprint(modified))
+
+    def test_schema_guide_matches_validation_fields_and_categories(self):
+        guide = schema_guide().set_index("Field")
+        self.assertEqual(list(guide.index), [*FEATURE_COLUMNS, "Revenue"])
+        self.assertTrue(guide.loc[FEATURE_COLUMNS, "Required"].eq("Yes").all())
+        self.assertIn("optional", guide.loc["Revenue", "Required"])
+        self.assertEqual(schema_guide(require_target=True).iloc[-1]["Required"], "Yes")
+        for column, categories in KNOWN_CATEGORIES.items():
+            for category in categories:
+                self.assertIn(str(category), guide.loc[column, "Accepted values"])
+
+
+class FixedPredictions:
+    classes_ = np.array([0, 1])
+
+    def __init__(self, predictions):
+        self.predictions = np.asarray(predictions)
+
+    def predict(self, features):
+        return self.predictions[:len(features)]
+
+
+class ProbabilityPredictions(FixedPredictions):
+    def __init__(self, predictions, probabilities, classes=(0, 1)):
+        super().__init__(predictions)
+        self.probabilities = np.asarray(probabilities)
+        self.classes_ = np.asarray(classes)
+
+    def predict_proba(self, features):
+        return self.probabilities[:len(features)]
+
+
+class DecisionPredictions(FixedPredictions):
+    def __init__(self, predictions, decisions, classes=(0, 1)):
+        super().__init__(predictions)
+        self.decisions = np.asarray(decisions)
+        self.classes_ = np.asarray(classes)
+
+    def decision_function(self, features):
+        return self.decisions[:len(features)]
+
+
+class PredictionContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.frame = read_dataset((ROOT / "test_data.csv").read_bytes()).head(4).copy()
+        cls.frame["Revenue"] = [False, True, False, True]
+
+    def test_feature_only_results_keep_saved_decisions_and_hide_evaluation(self):
+        labeled = read_dataset(csv_bytes(self.frame))
+        features = read_dataset(csv_bytes(self.frame.drop(columns="Revenue")), require_target=False)
+        for name in MODEL_FILES:
+            with self.subTest(model=name):
+                pipeline = load_pipeline(name, ROOT)
+                evaluated = evaluate_model(pipeline, labeled)
+                predicted = evaluate_model(pipeline, features)
+                np.testing.assert_array_equal(
+                    evaluated["predictions"]["PredictedRevenue"], predicted["predictions"]["PredictedRevenue"],
+                )
+                np.testing.assert_allclose(evaluated["scores"], predicted["scores"])
+                self.assertFalse(predicted["labeled"])
+                self.assertTrue(predicted["score_available"])
+                self.assertTrue(all(value is None for value in predicted["metrics"].values()))
+                self.assertIsNone(predicted["confusion"])
+                self.assertIsNone(predicted["y_true"])
+                self.assertTrue(predicted["report"].empty)
+                self.assertTrue(predicted["predictions"]["Correct"].isna().all())
+                self.assertTrue(predicted["predictions"]["ResultCategory"].eq("Unlabeled").all())
+
+    def test_positive_class_probability_and_decision_mapping(self):
+        model = ProbabilityPredictions([0, 1, 0, 1], [[.2, .8], [.8, .2], [.3, .7], [.7, .3]], classes=(1, 0))
+        result = evaluate_model(model, self.frame)
+        np.testing.assert_allclose(result["scores"], [.2, .8, .3, .7])
+        self.assertEqual(result["metrics"]["AUC"], 1)
+        self.assertEqual(result["positive_class"], 1)
+        reversed_decision = DecisionPredictions([0, 1, 0, 1], [3, -3, 2, -2], classes=(1, 0))
+        np.testing.assert_array_equal(purchase_score(reversed_decision, self.frame), [-3, 3, -2, 2])
+
+    def test_unavailable_scores_preserve_predictions_and_other_metrics(self):
+        for model in [
+            FixedPredictions([0, 1, 0, 1]),
+            DecisionPredictions([0, 1, 0, 1], [0, 1, np.nan, 1]),
+        ]:
+            with self.subTest(model=type(model).__name__):
+                result = evaluate_model(model, self.frame)
+                self.assertIsNone(result["scores"])
+                self.assertFalse(result["score_available"])
+                self.assertEqual(result["score_label"], "Unavailable")
+                self.assertIsNone(result["metrics"]["AUC"])
+                self.assertEqual(result["metrics"]["Accuracy"], 1)
+                self.assertTrue(result["predictions"]["PredictionScore"].isna().all())
+
+    def test_undefined_report_values_remain_missing(self):
+        result = evaluate_model(FixedPredictions([0, 0, 0, 0]), self.frame)
+        self.assertTrue(np.isnan(result["report"].loc["Purchase", "precision"]))
+        self.assertEqual(result["report"].loc["Purchase", "support"], 2)
+        self.assertEqual(result["metrics"]["Precision"], 0)
+        single = self.frame.copy()
+        single["Revenue"] = False
+        report = evaluate_model(FixedPredictions([0, 0, 0, 0]), single)["report"]
+        self.assertTrue(np.isnan(report.loc["Purchase", "recall"]))
+        self.assertTrue(np.isnan(report.loc["Purchase", "f1-score"]))
+
+    def test_operating_point_requires_exact_saved_rule_including_ties(self):
+        matched = evaluate_model(DecisionPredictions([0, 1, 0, 1], [-1, 1, 0, 2]), self.frame)
+        self.assertEqual(matched["operating_point"]["comparison"], ">")
+        self.assertEqual(matched["operating_point"]["threshold"], 0)
+        tied = evaluate_model(DecisionPredictions([0, 1, 0, 1], [-1, 0, 0, 2]), self.frame)
+        self.assertIsNone(tied["operating_point"])
+
+    def test_invalid_predictions_and_class_mapping_are_rejected(self):
+        with self.assertRaises(ValueError):
+            evaluate_model(FixedPredictions([0, .5, 0, 1]), self.frame)
+        model = FixedPredictions([0, 1, 0, 1])
+        model.classes_ = np.array([1, 2])
+        with self.assertRaisesRegex(ValueError, "binary classes"):
+            evaluate_model(model, self.frame)
+
+    def test_model_identity_covers_both_classifier_and_preprocessor(self):
+        for name in MODEL_FILES:
+            with self.subTest(model=name):
+                first = model_metadata(load_pipeline(name, ROOT), name)
+                self.assertEqual(first, model_metadata(load_pipeline(name, ROOT), name))
+        pipeline = load_pipeline("Decision Tree", ROOT)
+        before = model_metadata(pipeline, "Decision Tree")
+        self.assertEqual(before, model_metadata(deepcopy(pipeline), "Decision Tree"))
+        self.assertEqual(before["positive_class"], 1)
+        self.assertEqual(before["feature_count"], 17)
+        self.assertEqual(before["transformed_feature_count"], 75)
+        classifier_changed = deepcopy(pipeline)
+        classifier_changed.named_steps["classifier"].max_depth += 1
+        updated = model_metadata(classifier_changed)
+        self.assertNotEqual(before["identity"], updated["identity"])
+        self.assertEqual(before["preprocessing_fingerprint"], updated["preprocessing_fingerprint"])
+        preprocessing_changed = deepcopy(pipeline)
+        preprocessing_changed.named_steps["prepare"].named_transformers_["numeric"].scale_[0] += 1
+        updated = model_metadata(preprocessing_changed)
+        self.assertNotEqual(before["identity"], updated["identity"])
+        self.assertEqual(before["model_fingerprint"], updated["model_fingerprint"])
+
+    def test_evaluation_identity_uses_current_data_instead_of_stale_frame_attributes(self):
+        normalized = read_dataset(csv_bytes(self.frame))
+        original_fingerprint = normalized.attrs["dataset_fingerprint"]
+        normalized.loc[0, "PageValues"] += 1
+        result = evaluate_model(FixedPredictions([0, 1, 0, 1]), normalized)
+        self.assertNotEqual(result["dataset_fingerprint"], original_fingerprint)
+        self.assertEqual(result["dataset_fingerprint"], dataset_fingerprint(normalized))
 
 
 if __name__ == "__main__":
