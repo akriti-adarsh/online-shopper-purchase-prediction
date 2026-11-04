@@ -18,14 +18,16 @@ MUTED = "#61738B"
 
 def style(figure, height=360):
     figure.update_layout(
-        height=height, margin=dict(l=15, r=20, t=20, b=30),
+        height=height, margin=dict(l=15, r=20, t=100, b=60),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Arial, sans-serif", color=INK, size=12),
         hoverlabel=dict(bgcolor="white", font_color=INK),
-        legend=dict(orientation="h", y=-0.17, x=0),
+        legend=dict(orientation="h", y=1.04, yanchor="bottom",
+                    x=0, xanchor="left", traceorder="normal"),
     )
-    figure.update_xaxes(gridcolor="#E4EAF2", zeroline=False)
-    figure.update_yaxes(gridcolor="#E4EAF2", zeroline=False)
+    figure.update_xaxes(gridcolor="#E4EAF2", zeroline=False, automargin=True,
+                       title_standoff=14)
+    figure.update_yaxes(gridcolor="#E4EAF2", zeroline=False, automargin=True)
     return figure
 
 
@@ -41,6 +43,7 @@ def confusion_chart(matrix):
         hovertemplate="Actual: %{y}<br>Predicted: %{x}<br>Sessions: %{z:,}<extra></extra>",
     ))
     style(fig, 330)
+    fig.update_layout(margin=dict(t=20))
     fig.update_yaxes(autorange="reversed", title="Actual outcome", showgrid=False)
     fig.update_xaxes(title="Predicted outcome", showgrid=False)
     return fig
@@ -59,7 +62,7 @@ def purchase_outcomes_chart(matrix):
             marker_color=color, text=[str(int(value)) if value else "" for value in counts],
             textposition="auto", hovertemplate=label + ": %{x:,}<extra></extra>",
         ))
-    style(fig, 330)
+    style(fig, 390)
     fig.update_layout(barmode="stack", bargap=0.48, legend=dict(font_size=11))
     fig.update_xaxes(title="Number of sessions", rangemode="tozero")
     fig.update_yaxes(autorange="reversed", showgrid=False)
@@ -127,7 +130,7 @@ def performance_3d_chart(comparison):
             zaxis=dict(title="MCC", range=[-1, 1], backgroundcolor="#F1F5FC"),
             camera=dict(eye=dict(x=1.5, y=1.4, z=0.9)),
         ),
-        legend=dict(font_size=10, orientation="h", y=-0.05),
+        legend=dict(font_size=10, orientation="h", y=-0.05, yanchor="top"),
         margin=dict(l=0, r=0, t=0, b=60),
     )
     return fig
