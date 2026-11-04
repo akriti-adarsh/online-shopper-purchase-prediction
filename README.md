@@ -250,6 +250,11 @@ Serialized pipelines depend on their library versions. Use the pinned environmen
 | `app.py` | Streamlit interface for evaluating and comparing the five saved models |
 | `shopper_app/evaluation.py` | CSV validation, saved-pipeline loading, and evaluation calculations |
 | `shopper_app/charts.py` | Interactive charts for metrics, errors, and model comparisons |
+| `shopper_app/appearance.py`, `assets/appearance.js` | Browser appearance preference, system-theme detection, and chart-theme synchronization |
+| `shopper_app/presentation.py` | Shared presentation helpers for the application |
+| `shopper_app/explorer.py` | Session filtering, ordering, pagination, and export preparation |
+| `shopper_app/session_table.py`, `assets/session-table.js` | Interactive session table and session-detail selection |
+| `assets/app.css`, `assets/brand.svg` | Shared visual design and application mark |
 | `.streamlit/config.toml` | Application theme and server configuration |
 | `requirements.txt` | Pinned modeling, reporting, and application dependencies |
 | `requirements-dev.txt` | Notebook execution and editing dependencies |
@@ -275,6 +280,9 @@ Serialized pipelines depend on their library versions. Use the pinned environmen
 | `scripts/verify_artifacts.py` | Checks saved models and reported results |
 | `tests/test_evaluation.py` | Validation edge cases and saved-model result checks |
 | `tests/test_app.py` | Streamlit interaction and displayed-result checks |
+| `tests/test_explorer.py`, `tests/test_charts.py` | Session identity, filtering, curve calculations, metric ranking, and chart presentation checks |
+| `docs/validation.md` | Recorded automated and browser checks, reference values, and verification limits |
+| `docs/screenshots/` | Desktop and mobile screenshots in light and dark appearances |
 | `.github/workflows/validate.yml` | Automated artifact verification and application tests |
 | `.gitignore`, `.gitattributes` | Exclude local files and keep file handling consistent |
 
@@ -287,7 +295,11 @@ Serialized pipelines depend on their library versions. Use the pinned environmen
 - **Historical scope.** A random split does not measure performance on a later period, another retailer, or changed shopping behavior.
 - **Model assumptions.** Gaussian Naive Bayes applies conditional independence and Gaussian assumptions to transformed features. Correlated activity measures and encoded categories may depart from those assumptions; probability calibration is not evaluated here.
 
-## 10. Streamlit application
+## 10. Shopper Signals application
+
+**Shopper Signals** is the Streamlit interface for exploring the five saved classifiers. Its four destinations—**Overview**, **Compare Models**, **Session Explorer**, and **About**—share the active dataset and selected model. The interface uses a warm paper palette, restrained chart colors, and a dark appearance with the same outcome meanings.
+
+The assignment explicitly requires Streamlit and deployment on Streamlit Community Cloud. The application therefore keeps `app.py` as its entry point and uses the existing Python pipelines directly. The notebook, split, fitted models, and published results remain the scientific reference.
 
 ### Run locally
 
@@ -298,35 +310,124 @@ python -m pip install -r requirements.txt
 python -m streamlit run app.py
 ```
 
-Open the local address printed in the terminal. No Streamlit account is needed for local execution. The application uses the committed fitted pipelines and does not train models during evaluation.
+Open the local address printed in the terminal. No Streamlit account is needed for local execution. The application uses the committed fitted pipelines and does not train models during evaluation. The small browser components are served by Streamlit; no separate browser build or production Node.js runtime is required.
 
-### Evaluate a dataset
+### Explore the results
 
-1. Start with **Included test set** to reproduce the notebook's 2,466-session experiment. The Decision Tree is selected initially.
-2. Choose another classifier from **Prediction model** to update its six metrics, confusion matrix, classification report, and ranking curves.
-3. Choose **Upload a CSV** to evaluate a labeled test file. The included test CSV can also be downloaded from the interface and uploaded again.
-4. Use **Compare models** to evaluate all five classifiers on the current dataset. The comparison table and interactive 3D view show their tradeoffs on those same rows.
-5. Use **Session explorer** to inspect individual predictions and download the results as a CSV.
+1. Start with the bundled **2,466-session test set** and the **Decision Tree**. The context header identifies the active model and dataset.
+2. Change the model to see its six metrics and a finding calculated from its current predictions. Evaluation uses the model's saved decision rule.
+3. Open **Evaluation settings** to download the test CSV or schema, inspect upload requirements, and select a different dataset. A valid upload becomes the active dataset; an invalid upload leaves the previous valid dataset available.
+4. Use **Compare Models** to evaluate all five classifiers on exactly the same active rows. Select a metric for the ranked chart, inspect the sortable table, and open the optional 3D comparison.
+5. Select a confusion-matrix outcome to open the corresponding sessions in **Session Explorer**. Inspect a session's features, adjust filters and ordering, and download the filtered predictions.
 
 | Area | What it provides |
 |---|---|
-| Overview | Accuracy, ROC AUC, precision, recall, F1, MCC, confusion matrix, classification report, and ranking curves |
-| Compare models | A shared-dataset comparison of all five classifiers, including a 3D metric view |
-| Session explorer | Actual outcomes, predicted outcomes, scores, correctness, and a prediction download |
+| Overview | A result-based finding; accuracy, ROC AUC, precision, recall, F1, and MCC; an interactive confusion matrix; buyer coverage; ranking curves; and a classification report |
+| Compare Models | All five models on the active dataset, a sortable six-metric table, a ranked metric chart, and an optional 3D view |
+| Session Explorer | Stable session identifiers, outcomes, model scores, category filters, search, sorting, pagination, session details, and filtered CSV export |
 | About | Dataset context, evaluation choices, and interpretation guidance |
 
-The displayed scores are calculated from the selected dataset. The notebook comparison above remains the result for the original held-out split; an uploaded dataset may produce different values. SVM prediction scores are decision-function values, not purchase probabilities.
+The displayed results are calculated from the selected dataset. The notebook comparison above remains the result for the original held-out split; an uploaded dataset may produce different values. Switching pages retains the current model and dataset.
+
+### Read the evaluation correctly
+
+The confusion matrix places **actual outcomes on rows** and **predicted outcomes on columns**. Each cell includes a count, an outcome label, and its standard code. The **Count / % of actual class** control changes the displayed measure; percentages use the total in that actual-outcome row as their denominator. Every cell is also a button that opens its matching sessions.
+
+| Outcome | Meaning | Visual meaning |
+|---|---|---|
+| True negative (TN) | No purchase occurred and none was predicted | Neutral ink |
+| False positive (FP) | A purchase was predicted, but none occurred | Mulberry |
+| False negative (FN) | A purchase occurred, but the model missed it | Ochre |
+| True positive (TP) | A purchase occurred and was identified | Forest olive |
+
+Buyer coverage separates two questions: **recall** is the share of actual buyers identified, `TP / (TP + FN)`; **precision** is the share of purchase predictions that were correct, `TP / (TP + FP)`. The bars display their counts and denominators explicitly.
+
+ROC and precision–recall curves use scores for the **purchase class, `1`**, with reference baselines and accessible numerical summaries. A displayed operating point must agree with the saved model's predictions; the interface does not change the decision threshold. Probability-capable classifiers expose a purchase probability, while SVM exposes an uncalibrated decision score. A larger SVM score ranks a session more strongly toward purchase; it is not a percentage or a calibrated probability.
+
+Single-class labeled files remain usable for prediction and inspection, but ROC AUC and MCC are unavailable. Undefined classification-report values are displayed as unavailable. The published headline precision, recall, and F1 retain the notebook's zero-division convention of `0` when their denominator is zero. Feature-only uploads have no observed outcomes, so their evaluation metrics and error categories are unavailable.
+
+Session identifiers are derived from the normalized dataset and original row position. Filtering, sorting, pagination, and export preserve that identity. The session detail view presents both readable feature labels and original column names; it does not invent feature contributions or explanations for individual predictions.
 
 ### CSV requirements
 
-Upload a UTF-8 CSV with all **17 predictors plus `Revenue`**, using the column names in the included test file. Column order may differ. The upload limit is **5 MB and 5,000 rows**, intended for test data rather than a full training dataset.
+Upload a **UTF-8, comma-separated CSV** with all **17 predictors**. Include `Revenue` to evaluate observed outcomes, or omit that column entirely to obtain predictions and scores only. Column order may differ, and surrounding whitespace is stripped. The upload limit is **5 MiB (5,242,880 bytes) and 5,000 rows**.
 
-- `Revenue` and `Weekend` accept `True`/`False` or `1`/`0`, including differences in capitalization and surrounding spaces.
-- Numeric values must be finite and nonnegative. Page counts and categorical code fields must be integers; bounce rate, exit rate, and special-day proximity must be between 0 and 1.
-- Missing values, duplicate column names, missing required columns, and unexpected extra columns produce a validation message before evaluation.
-- A file containing only one outcome class can still be inspected. ROC AUC and MCC are shown as unavailable because the dataset does not support the usual two-class comparison.
+| Columns | Accepted values |
+|---|---|
+| `Administrative`, `Informational`, `ProductRelated` | Nonnegative whole-number page counts |
+| `Administrative_Duration`, `Informational_Duration`, `ProductRelated_Duration`, `PageValues` | Finite, nonnegative numbers |
+| `BounceRates`, `ExitRates`, `SpecialDay` | Numbers between `0` and `1`, inclusive |
+| `OperatingSystems`, `Browser`, `Region`, `TrafficType` | Positive integer category codes |
+| `Month` | Text category; fitted values are `Aug`, `Dec`, `Feb`, `Jul`, `June`, `Mar`, `May`, `Nov`, `Oct`, and `Sep` |
+| `VisitorType` | Text category; fitted values are `New_Visitor`, `Other`, and `Returning_Visitor` |
+| `Weekend` | `True`/`False` or `1`/`0` |
+| `Revenue` | Optional outcome column: `True`/`False` or `1`/`0`; required for evaluation |
 
-Uploaded CSVs are processed in the current session. The application does not save them to the repository or place them in a shared data cache. Only the packaged model pipelines are cached for reuse.
+Boolean values are case-insensitive. Text categories retain their capitalization. Valid categories unseen during fitting are accepted with a warning; the saved encoder ignores their unknown category indicators. Repeated records are retained and reported rather than silently removed.
+
+Missing values, duplicate column names, missing required predictors, extra columns, malformed CSV records, and invalid numeric or Boolean values are rejected before activation. Validation messages identify the affected columns and applicable CSV row numbers without reproducing row contents. A partially filled `Revenue` column is invalid: provide all outcomes or remove the column for prediction-only use.
+
+The settings panel provides the bundled test CSV as a working example and a downloadable schema generated from the same field rules used by validation. The uploaded filename, row count, and preview help confirm the active data. Invalid uploads retain the previous valid dataset and its results.
+
+### Architecture and data handling
+
+| Layer | Responsibility |
+|---|---|
+| Streamlit interface | Navigation, active dataset/model state, evaluation controls, metric displays, session details, and downloads |
+| Evaluation module | Schema validation, normalized dataset identity, trusted model loading, positive-class scores, metrics, and prediction records |
+| Explorer and table modules | Consistent filtering, ordering, pagination, stable row selection, and filtered export |
+| Chart and presentation modules | Shared outcome meanings, metric comparisons, ranking curves, and visual summaries |
+| Appearance component and shared assets | System/Light/Dark preference, browser-to-Python theme state, focus restoration, and shared visual styling |
+
+Uploaded data and computed results stay in the current application session. The app does not write uploaded CSVs to disk or place their rows in a shared result cache. Only the packaged model pipelines are shared through the model cache. Evaluation-cache identity includes the dataset, fitted classifier, and fitted preprocessing, so changing any of those inputs invalidates the relevant result.
+
+The application loads only its five registered local `.joblib` files after checking their hashes against the experiment manifest. Uploaded model files and arbitrary serialized objects are not accepted. Predictions always use the fitted preprocessing and saved decision rules; there is no training or model replacement through the interface.
+
+### Appearance and accessibility
+
+**System** is the default appearance and follows the browser's operating-system preference. **Light** and **Dark** selections are stored in browser local storage and restored on reload; a blocked storage API leaves the control usable for the current session. System changes are observed while System is selected. The resolved appearance is sent to Python so Plotly charts use the same palette as the page.
+
+Streamlit controls the initial page bootstrap. The preference is restored when the appearance component mounts, and the initial server render uses the light palette until the browser reports its preference. A brief initial mismatch is possible; the application does not promise a theme change before the first browser paint.
+
+The design targets **WCAG 2.2 AA** with labeled controls, visible focus, keyboard-operable outcome buttons, outcome text alongside color, reduced-motion support, and responsive layouts. Session details can be opened from the table or an alternative keyboard selector. These measures are an implementation target, not a certification of the entire interface.
+
+The specified palette's base text pairs were checked using relative luminance:
+
+| Text/background pair | Light contrast | Dark contrast |
+|---|---:|---:|
+| Main text on page | 14.35:1 | 15.20:1 |
+| Secondary text on page | 6.12:1 | 8.65:1 |
+| Action text on action background | 7.20:1 | 8.82:1 |
+| Highlight text on highlight background | 8.42:1 | 10.90:1 |
+
+These checks cover those exact color pairs. They do not establish contrast for every widget state, chart mark, or browser-rendered table. The [validation record](docs/validation.md) distinguishes completed browser and keyboard checks from the unverified 200% zoom and assistive-technology checks.
+
+### Validate the application
+
+From the repository root, install the development dependencies before running the checks:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m compileall -q app.py shopper_app
+python -m ruff check app.py shopper_app tests
+python -m unittest discover -s tests -v
+python scripts/verify_artifacts.py
+```
+
+The recorded local validation passed **61 unit tests**, Ruff **0.17.3**, Python compilation, JavaScript syntax checks, and verification of **21 artifact checksums**. All five models reproduced their six published metrics and confusion-matrix counts. Browser components were checked separately because Python's Streamlit test runner does not execute their JavaScript.
+
+Live browser checks confirmed the k-Nearest Neighbors reference results, its 258-row missed-buyer drill-down and export, keyboard session details, valid and feature-only uploads, invalid-upload recovery, five-model MCC comparison, and dark appearance after reload. Layout checks found no page-level horizontal overflow at widths of **360, 390, 768, 1024, and 1440 pixels**. The 390-pixel mobile check also covered settings and detail-dialog bounds, section ordering, and keyboard interaction.
+
+**Verification limits:** the attempted zoom shortcut had no effect in the embedded browser, so **200% zoom remains unverified**. Assistive-technology testing and a complete WCAG audit have not been performed. Cloud deployment is also pending. See the [full validation record](docs/validation.md) for the checked scenarios, exact reference values, and remaining checks.
+
+### Interface screenshots
+
+The linked images show local desktop and mobile views in both appearances. Desktop frames are 1440 × 1360 pixels; mobile frames are 390 × 1680 pixels to show more of the page. Normal mobile interaction was also checked at 390 × 844 pixels.
+
+| Light appearance | Dark appearance |
+|---|---|
+| <a href="docs/screenshots/desktop-light.png"><img src="docs/screenshots/desktop-light.png" alt="Shopper Signals desktop overview in light appearance" width="440"></a> | <a href="docs/screenshots/desktop-dark.png"><img src="docs/screenshots/desktop-dark.png" alt="Shopper Signals desktop overview in dark appearance" width="440"></a> |
+| <a href="docs/screenshots/mobile-light.png"><img src="docs/screenshots/mobile-light.png" alt="Shopper Signals mobile overview in light appearance" width="240"></a> | <a href="docs/screenshots/mobile-dark.png"><img src="docs/screenshots/mobile-dark.png" alt="Shopper Signals mobile overview in dark appearance" width="240"></a> |
 
 ### Deploy to Streamlit Community Cloud
 
