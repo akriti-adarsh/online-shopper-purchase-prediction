@@ -16,7 +16,8 @@ python scripts/verify_artifacts.py
 
 | Check | Recorded result |
 |---|---|
-| Unit tests | **61 passed**, covering dataset validation, saved-model evaluation, chart calculations, explorer behavior, and Streamlit interactions |
+| Python unit tests | **64 passed**, covering dataset validation, saved-model evaluation, chart calculations, explorer behavior, and Streamlit interactions |
+| Browser-component tests | **4 passed**, covering native tab order, hidden targets, delayed rendering, and successful focus confirmation |
 | Ruff 0.17.3 | Clean for `app.py`, `shopper_app`, and `tests` |
 | Python compilation | Passed |
 | Browser-component JavaScript syntax | Passed |
@@ -26,6 +27,22 @@ python scripts/verify_artifacts.py
 The tests cover positive-class score mapping, SVM score semantics, supported and unavailable scores, repeated scores, verified operating points, single-class inputs, optional labels, upload limits, validation errors, category handling, stable session identifiers, all four outcome filters, pagination, sorting, filtered exports, and recovery after invalid input. Comparison tests cover all six metrics, ties, unavailable values, and negative MCC ranges.
 
 The notebook was not rerun and the fitted scientific artifacts were not regenerated for this interface update. Artifact verification reloads the saved models and checks the recorded experiment. No separate JavaScript production build is required: Streamlit serves the small native browser components directly, and production does not require Node.js.
+
+Run the dependency-free component tests with Node.js 22 or newer: `node --test tests/test_components.mjs`. The hosted validation workflow runs these alongside the Python checks.
+
+## Follow-up audit
+
+The audit reproduced and corrected the following issues. Regression tests failed against the previous behavior before the fixes were applied.
+
+| Issue | Correction and verification |
+|---|---|
+| Clicking the active navigation option cleared its selection and could jump to Overview | Preserve the last valid destination, including after matrix drill-down and return; checked across all four destinations |
+| Clicking the active percentage option silently switched the matrix to counts | Retain the selected matrix display mode; checked for both counts and percentages |
+| Restoring focus removed a native button from sequential keyboard navigation | Preserve the button's native tab index; live browser return focused the missed-buyer button and Tab moved to the next outcome |
+| A hidden target could consume the focus request before results became visible | Wait for visible content, observe visibility changes, and confirm focus actually landed; checked with component regressions and live drill-down |
+| Formula-like text in uploaded categories was exported as executable spreadsheet input | Prefix those string values with an apostrophe in the exported copy; preserve original inputs, row IDs, and numeric negative scores |
+
+The audit reviewed data validation, trusted model loading, positive-class score mapping, session state, chart calculations, escaped HTML, and export behavior. It found no further reproducible failures in those checks. This is a bounded audit, not a guarantee that every environment and input is defect-free.
 
 ## Reference result checked in the browser
 

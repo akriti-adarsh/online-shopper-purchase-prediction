@@ -348,6 +348,8 @@ Single-class labeled files remain usable for prediction and inspection, but ROC 
 
 Session identifiers are derived from the normalized dataset and original row position. Filtering, sorting, pagination, and export preserve that identity. The session detail view presents both readable feature labels and original column names; it does not invent feature contributions or explanations for individual predictions.
 
+Filtered CSV exports keep formula-like text literal for spreadsheet use: text beginning with `=`, `+`, `-`, or `@`, including after whitespace, receives a leading apostrophe in the exported file. Original inputs, predictions, and session IDs remain unchanged; numeric values such as negative SVM decision scores remain numeric.
+
 ### CSV requirements
 
 Upload a **UTF-8, comma-separated CSV** with all **17 predictors**. Include `Revenue` to evaluate observed outcomes, or omit that column entirely to obtain predictions and scores only. Column order may differ, and surrounding whitespace is stripped. The upload limit is **5 MiB (5,242,880 bytes) and 5,000 rows**.
@@ -414,7 +416,13 @@ python -m unittest discover -s tests -v
 python scripts/verify_artifacts.py
 ```
 
-The recorded local validation passed **61 unit tests**, Ruff **0.17.3**, Python compilation, JavaScript syntax checks, and verification of **21 artifact checksums**. All five models reproduced their six published metrics and confusion-matrix counts. Browser components were checked separately because Python's Streamlit test runner does not execute their JavaScript.
+Run the dependency-free browser-component regression tests with Node.js 22 or newer:
+
+```bash
+node --test tests/test_components.mjs
+```
+
+The recorded local validation passed **64 Python tests and 4 browser-component tests**, Ruff **0.17.3**, Python compilation, JavaScript syntax checks, and verification of **21 artifact checksums**. All five models reproduced their six published metrics and confusion-matrix counts. The component tests exercise focus visibility, tab order, and delayed target rendering; interactive browser checks supplement them because Python's Streamlit test runner does not execute JavaScript. Node.js is needed only for these development checks, not to run or deploy the app.
 
 Live browser checks confirmed the k-Nearest Neighbors reference results, its 258-row missed-buyer drill-down and export, keyboard session details, valid and feature-only uploads, invalid-upload recovery, five-model MCC comparison, and dark appearance after reload. Layout checks found no page-level horizontal overflow at widths of **360, 390, 768, 1024, and 1440 pixels**. The 390-pixel mobile check also covered settings and detail-dialog bounds, section ordering, and keyboard interaction.
 

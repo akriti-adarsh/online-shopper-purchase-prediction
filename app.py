@@ -43,6 +43,7 @@ from shopper_app.session_table import session_table
 
 REPOSITORY = "https://github.com/akriti-adarsh/online-shopper-purchase-prediction"
 VIEWS = ["Overview", "Compare Models", "Session Explorer", "About"]
+MATRIX_MODES = ["Count", "% of actual class"]
 METRIC_LABELS = {"Accuracy": "Accuracy", "AUC": "ROC AUC", "Precision": "Precision",
                  "Recall": "Recall", "F1": "F1", "MCC": "MCC"}
 METRIC_HELP = {
@@ -80,6 +81,7 @@ def reset_filters():
 
 def open_explorer(category, cell=None):
     st.session_state.view = "Session Explorer"
+    st.session_state.last_view = "Session Explorer"
     st.session_state.outcome_filter = category
     st.session_state.session_search = ""
     st.session_state.return_cell = cell
@@ -89,13 +91,23 @@ def open_explorer(category, cell=None):
 
 def back_to_overview():
     st.session_state.view = "Overview"
+    st.session_state.last_view = "Overview"
     cell = st.session_state.get("return_cell")
     set_focus(f".st-key-cell_{cell} button" if cell else "#overview-heading")
 
 
 def change_view():
+    if st.session_state.view not in VIEWS:
+        st.session_state.view = st.session_state.last_view
+    st.session_state.last_view = st.session_state.view
     set_focus({"Overview": "#overview-heading", "Compare Models": "#comparison-heading",
                "Session Explorer": "#explorer-heading", "About": "#about-heading"}.get(st.session_state.view, "#overview-heading"))
+
+
+def change_matrix_mode():
+    if st.session_state.matrix_mode not in MATRIX_MODES:
+        st.session_state.matrix_mode = st.session_state.last_matrix_mode
+    st.session_state.last_matrix_mode = st.session_state.matrix_mode
 
 
 def activate_dataset(frame, name, kind):
@@ -139,6 +151,10 @@ for key, default in {"view": "Overview", "model_name": "Decision Tree", "dataset
                      "outcome_filter": "All sessions", "session_search": "", "matrix_mode": "Count"}.items():
     if key not in st.session_state:
         st.session_state[key] = default
+if "last_view" not in st.session_state:
+    st.session_state.last_view = st.session_state.view or "Overview"
+if "last_matrix_mode" not in st.session_state:
+    st.session_state.last_matrix_mode = st.session_state.matrix_mode or "Count"
 
 # Keep conditional widgets' values when their destination is not being rendered.
 for key in ["outcome_filter", "session_search", "session_sort", "sort_direction",
@@ -243,7 +259,7 @@ def render_metrics():
 def render_matrix():
     heading("Every decision, accounted for", "01 / OUTCOMES")
     st.caption("Actual outcomes on rows. Predicted outcomes on columns. Select a cell to inspect its sessions.")
-    mode = st.segmented_control("Matrix values", ["Count", "% of actual class"], key="matrix_mode")
+    mode = st.segmented_control("Matrix values", MATRIX_MODES, key="matrix_mode", on_change=change_matrix_mode)
     matrix = result["confusion"]
     with st.container(key="matrix_grid"):
         st.html('<div class="matrix-axis"><span>Predicted: no purchase</span><span>Predicted: purchase</span></div>')

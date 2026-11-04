@@ -101,6 +101,26 @@ class SessionExplorerTests(unittest.TestCase):
         self.assertNotIn("Revenue", exported)
         self.assertTrue(exported["Correct"].isna().all())
 
+    def test_export_keeps_formula_like_text_literal_without_changing_predictions(self):
+        formula_text = ["=1+1", "+1+1", "-1+1", "@SUM(1,1)", "  =1+1", "\t=1+1", "\r\n=1+1"]
+        rows = self.predictions.head(len(formula_text)).copy()
+        rows["Month"] = formula_text
+        rows["VisitorType"] = pd.Series(["Returning_Visitor"] * len(rows), index=rows.index, dtype="string")
+        rows.loc[rows.index[0], "VisitorType"] = "=1+1"
+        rows["PredictionScore"] = -0.25
+        original = rows.copy(deep=True)
+
+        exported = pd.read_csv(BytesIO(export_sessions(rows)))
+
+        self.assertEqual(exported["Month"].tolist(), ["'" + value for value in formula_text])
+        self.assertEqual(exported["VisitorType"].iloc[0], "'=1+1")
+        self.assertTrue(exported["VisitorType"].iloc[1:].eq("Returning_Visitor").all())
+        self.assertTrue(exported["PredictionScore"].eq(-0.25).all())
+        self.assertTrue(pd.api.types.is_numeric_dtype(exported["PredictionScore"]))
+        self.assertEqual(exported["SessionID"].tolist(), original["SessionID"].tolist())
+        self.assertEqual(len(exported), len(original))
+        pd.testing.assert_frame_equal(rows, original)
+
     def test_invalid_filters_sort_columns_and_ids_are_recoverable(self):
         with self.assertRaises(ValueError):
             filter_sessions(self.predictions, "Unknown category")

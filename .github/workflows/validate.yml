@@ -31,3 +31,5 @@ jobs:
         run: python scripts/verify_artifacts.py
       - name: Test dataset validation and application behavior
         run: python -m unittest discover -s tests -v
+      - name: Test browser component focus behavior
+        run: node --test tests/test_components.mjs

@@ -68,8 +68,11 @@ export default function (component) {
       return true;
     }
     if (!target || !target.isConnected || !target.getClientRects().length) return false;
-    if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+    if (getComputedStyle(target).visibility !== "visible" || target.matches(":disabled") || target.closest("[inert]")) return false;
+    // Native buttons must keep their normal place in sequential Tab navigation.
+    if (target.tabIndex < 0 && !target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
     target.focus({ preventScroll: true });
+    if (document.activeElement !== target) return false;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     target.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
     root.dataset.shopperFocusToken = focus.token;
@@ -83,7 +86,10 @@ export default function (component) {
         window.clearTimeout(focusTimeout);
       }
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, {
+      childList: true, subtree: true, attributes: true,
+      attributeFilter: ["class", "style", "hidden", "disabled", "inert", "data-test-script-state"],
+    });
     focusTimeout = window.setTimeout(() => observer.disconnect(), 10000);
   }
 

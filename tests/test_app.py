@@ -169,6 +169,49 @@ class StreamlitAppTests(unittest.TestCase):
                     expected_count = int(self.counts.loc[name, column])
                     self.assertTrue(app.button(key=f"cell_{code}").label.startswith(f"**{expected_count:,}**"))
 
+    def test_clearing_active_navigation_keeps_the_current_destination_selected(self):
+        app = self.make_app()
+        identity = app.session_state["active_id"]
+        headings = {
+            "Overview": "overview-heading", "Compare Models": "comparison-heading",
+            "Session Explorer": "explorer-heading", "About": "about-heading",
+        }
+        for view, heading_id in headings.items():
+            with self.subTest(view=view):
+                self.navigate(app, view)
+                app.segmented_control(key="view").set_value(None).run()
+                self.assert_ok(app)
+                self.assertEqual(app.segmented_control(key="view").value, view)
+                rendered = [element.value for element in app.html if "<h1" in element.value]
+                self.assertEqual(len(rendered), 1)
+                self.assertIn(f'id="{heading_id}"', rendered[0])
+                self.assertEqual(app.session_state["active_id"], identity)
+
+        self.navigate(app, "Overview")
+        app.button(key="cell_fn").click().run()
+        app.segmented_control(key="view").set_value(None).run()
+        self.assert_ok(app)
+        self.assertEqual(app.segmented_control(key="view").value, "Session Explorer")
+        self.assertEqual(app.selectbox(key="outcome_filter").value, "Missed buyers")
+        self.assertEqual(self.matching_count(app), 168)
+        app.button(key="back_to_overview").click().run()
+        app.segmented_control(key="view").set_value(None).run()
+        self.assert_ok(app)
+        self.assertEqual(app.segmented_control(key="view").value, "Overview")
+        self.assert_metrics(app, self.expected.loc["Decision Tree"])
+
+    def test_clearing_matrix_mode_keeps_the_measure_and_active_toggle(self):
+        app = self.make_app()
+        app.selectbox(key="model_name").set_value("k-Nearest Neighbors").run()
+        for mode, expected_value in (("Count", "**258**"), ("% of actual class", "**67.5%**")):
+            with self.subTest(mode=mode):
+                app.segmented_control(key="matrix_mode").set_value(mode).run()
+                app.segmented_control(key="matrix_mode").set_value(None).run()
+                self.assert_ok(app)
+                self.assertEqual(app.segmented_control(key="matrix_mode").value, mode)
+                self.assertTrue(app.button(key="cell_fn").label.startswith(expected_value))
+                self.assert_metrics(app, self.expected.loc["k-Nearest Neighbors"])
+
     def test_matrix_drilldown_matches_all_four_knn_outcomes_and_preserves_context(self):
         app = self.make_app()
         app.selectbox(key="model_name").set_value("k-Nearest Neighbors").run()

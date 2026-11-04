@@ -73,14 +73,26 @@ def paginate_sessions(frame: pd.DataFrame, page: int = 1, page_size: int = 25) -
 
 
 def export_sessions(frame: pd.DataFrame) -> bytes:
-    """Export every supplied filtered row, including its original features and ID."""
+    """Export all filtered rows with formula-like text kept literal in spreadsheets.
+
+    Prefix only string values that could be interpreted as formulas. Numeric
+    values, including negative SVM decision scores, retain their numeric type.
+    The active predictions and original feature values are never modified.
+    """
     summary = [
         "SessionID", "OriginalRow", "Revenue", "PredictedRevenue",
         "PredictionScore", "ResultCategory", "Correct",
     ]
     columns = [column for column in summary if column in frame.columns]
     columns += [column for column in frame.columns if column not in columns]
-    return frame.loc[:, columns].to_csv(index=False, lineterminator="\n").encode("utf-8")
+    exported = frame.loc[:, columns].copy()
+    for column in exported.select_dtypes(include=["object", "string"]):
+        exported[column] = exported[column].map(
+            lambda value: "'" + value
+            if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@"))
+            else value
+        )
+    return exported.to_csv(index=False, lineterminator="\n").encode("utf-8")
 
 
 def session_detail(predictions: pd.DataFrame, session_id: str) -> pd.Series:
