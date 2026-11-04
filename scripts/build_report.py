@@ -10,10 +10,11 @@ import joblib
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
+
+from notebook_visuals import class_balance_figure, comparison_figure
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -87,55 +88,27 @@ def main():
     }
     write_json(results / "data_quality.json", quality)
 
-    plt.rcParams.update({
-        "font.family": "DejaVu Sans", "font.size": 11,
-        "axes.spines.top": False, "axes.spines.right": False,
-        "axes.labelcolor": "#253B4F", "text.color": "#172B3A",
-        "xtick.color": "#42586B", "ytick.color": "#42586B",
-        "figure.facecolor": "white", "axes.facecolor": "white",
-    })
-    counts = data["Revenue"].value_counts().reindex([False, True])
-    fig, ax = plt.subplots(figsize=(10, 3.6), layout="constrained")
-    bars = ax.barh(["No purchase", "Purchase"], counts, color=["#3C5973", "#168A83"], height=0.52)
-    ax.invert_yaxis()
-    for bar, count in zip(bars, counts):
-        ax.text(count + 180, bar.get_y() + bar.get_height() / 2,
-                f"{count:,}  ({count / len(data):.2%})", va="center", fontsize=12)
-    ax.set(xlim=(0, 13500), xlabel="Number of sessions",
-           title="Purchases represent 15.47% of the source dataset")
-    ax.grid(axis="x", alpha=0.15)
-    ax.set_axisbelow(True)
-    fig.savefig(results / "class_balance.png", dpi=180, bbox_inches="tight")
-    plt.close(fig)
-
-    ordered = comparison.sort_values(["F1", "MCC"], ascending=False)
-    labels = ordered.index.to_list()
-    positions = np.arange(len(ordered))
-    fig, ax = plt.subplots(figsize=(11, 6.2), layout="constrained")
-    for offset, metric, color in [(-0.24, "Precision", "#3C5973"),
-                                   (0, "Recall", "#D69A3C"),
-                                   (0.24, "F1", "#168A83")]:
-        bars = ax.barh(positions + offset, ordered[metric], height=0.21,
-                       color=color, label=metric)
-        ax.bar_label(bars, fmt="%.3f", padding=4, fontsize=9)
-    ax.set(yticks=positions, yticklabels=labels, xlim=(0, 1),
-           xlabel="Purchase-class metric (higher is better)",
-           title="Decision Tree gives the strongest purchase F1 on this split")
-    ax.invert_yaxis()
-    ax.grid(axis="x", alpha=0.15)
-    ax.set_axisbelow(True)
-    ax.legend(loc="lower right", frameon=False, ncols=3)
-    fig.savefig(results / "model_comparison.png", dpi=180, bbox_inches="tight")
-    plt.close(fig)
+    counts = data["Revenue"].astype(int).value_counts().reindex([0, 1])
+    for figure, filename in [
+        (class_balance_figure(counts), "class_balance.png"),
+        (comparison_figure(comparison), "model_comparison.png"),
+    ]:
+        figure.savefig(results / filename, dpi=170, bbox_inches="tight",
+                       facecolor=figure.get_facecolor())
+        plt.close(figure)
+    labels = comparison.sort_values(["F1", "MCC"], ascending=False).index.to_list()
 
     packages = ["scikit-learn", "numpy", "pandas", "scipy", "joblib", "matplotlib", "threadpoolctl"]
     artifact_paths = [
         data_path, ROOT / "test_data.csv", *model_paths,
         ROOT / "model" / "Online_Shoppers_Model_Analysis.ipynb",
+        ROOT / "scripts" / "notebook_visuals.py",
+        ROOT / "scripts" / "notebook_tables.py",
         *(results / name for name in [
             "model_comparison.csv", "error_counts.csv", "training_versions.txt",
             "data_quality.json", "class_balance.png", "model_comparison.png",
-            "confusion_matrices.png", "roc_curves.png",
+            "confusion_matrices.png", "roc_curves.png", "model_landscape_3d.png",
+            "confusion_matrices_3d.png", "precision_recall_curves.png",
         ]),
     ]
     manifest = {

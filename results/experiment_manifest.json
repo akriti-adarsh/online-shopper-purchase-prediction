@@ -2615,14 +2615,19 @@
     "model/k_nearest_neighbors.joblib": "64a849fb92b24d0b9b2c89badcdabc865b41e35ce7758b6856703f7e92fd8deb",
     "model/gaussian_naive_bayes.joblib": "042141ed5d0b02f5571a8a212070905da185147deb57f46a6381c446a8c66509",
     "model/support_vector_machine.joblib": "bf73d3349b10849196a0ce29f6786edfec3b36b26c654cd38f4cbed3bccb5cfb",
-    "model/Online_Shoppers_Model_Analysis.ipynb": "7001a69773e5da6c4254955c474be5dc02834047548ad282a9d0238e7d88e64f",
+    "model/Online_Shoppers_Model_Analysis.ipynb": "111ba62e38b1d7a94a22bba52e537fbc124e87ad77410f70b05ccd47f5d53aee",
+    "scripts/notebook_visuals.py": "25e1c566dfdd3079a7a2434f865575a932ccb6173f9bb433bfd06f4e9a6c9b5a",
+    "scripts/notebook_tables.py": "15c8544681316eebbe0fdc2ceea3e034d3b4437280df76f2452d87defb2a9a8a",
     "results/model_comparison.csv": "0a410e4e8f789c45c236082279345b81325ea0a429d29fdd84490262a3edaf4e",
     "results/error_counts.csv": "d97a09c645dcac5f542356aaedd4b520e666ec29c948ea70a41bbb3b17c5dc57",
     "results/training_versions.txt": "1b19f2ba075fb59956c66ca09e0f072a1f2e5e9b9884278804a0d441565b43cb",
     "results/data_quality.json": "543a73922d1a7818e6831323e69d2672f83e15ae50763f50035280b5836b78ab",
-    "results/class_balance.png": "b31afe652cedc0c19e133154fbc6e7685e92e1cd02f6ca3e925714e1a0029447",
-    "results/model_comparison.png": "5ad06b0b50c6bbabf7f22fd6c67b28fcc787aa4e1f0279b6440f09b8380f9c72",
-    "results/confusion_matrices.png": "980f4b6cd98a80bba9df6a834cf4ceb1b249f02df8c25a6d0817d4c09d3d080f",
-    "results/roc_curves.png": "fea25282674b91bf409d9a761a75b62e297c2c6465a0cfee1dc77d00a260a2f7"
+    "results/class_balance.png": "9fae6e1aa64f6f420ec85718a6d49a7b9365fd0e22127150c94c8dbc3d0672e1",
+    "results/model_comparison.png": "adbd6b00bb63da781615351c54ce58e146840a2de8eae591b3e0952b54d12636",
+    "results/confusion_matrices.png": "6009f54ca816da0f74a26dcd4ccd34667994747ffd51244400ccab34c3f2eaaa",
+    "results/roc_curves.png": "ced3aa5a6692d2a815290d9b10a1ce37e012768b5eadc30002fa48a2bd2c0e39",
+    "results/model_landscape_3d.png": "67e6c9aac184580dc0561f9ad8d1926e72fd1448d99613e8bd800cb2f89f2011",
+    "results/confusion_matrices_3d.png": "84ee5dc11152d3ca7ee971349abe53b79181f8e69822d65d8da2025ae48de31c",
+    "results/precision_recall_curves.png": "b12424b9e9b5bf256ac9f09039deb1dddbe49c356de7e8cfa5506d08cfd1c663"
   }
 }
