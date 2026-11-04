@@ -2,7 +2,7 @@
 
 [![Validate experiment artifacts](https://github.com/akriti-adarsh/online-shopper-purchase-prediction/actions/workflows/validate.yml/badge.svg)](https://github.com/akriti-adarsh/online-shopper-purchase-prediction/actions/workflows/validate.yml)
 
-A reproducible comparison of five classifiers for identifying shopping sessions that end in a purchase. The project includes an executed notebook, fitted preprocessing and model pipelines, labeled test data, evaluation tables, and visual results.
+A reproducible comparison of five classifiers for identifying shopping sessions that end in a purchase. The project includes an executed notebook, fitted preprocessing and model pipelines, labeled test data, evaluation tables, visual results, and an interactive Streamlit application.
 
 **Main finding:** the Decision Tree achieves the highest purchase F1 (**0.6167**) on the shared test split, with **0.8921 accuracy**, **0.9129 ROC AUC**, and **0.5585 MCC**. These results describe this experiment; they do not establish performance on future traffic.
 
@@ -64,7 +64,7 @@ On this test set, always predicting “no purchase” produces **84.51% accuracy
 
 [akriti-adarsh/online-shopper-purchase-prediction](https://github.com/akriti-adarsh/online-shopper-purchase-prediction)
 
-The analysis is available in [model/Online_Shoppers_Model_Analysis.ipynb](model/Online_Shoppers_Model_Analysis.ipynb). The repository currently covers modeling and evaluation; the Streamlit application is the next development stage.
+The analysis is available in [model/Online_Shoppers_Model_Analysis.ipynb](model/Online_Shoppers_Model_Analysis.ipynb). The interactive evaluation interface starts from [app.py](app.py); local usage and deployment settings are described below.
 
 ## 4. Models used
 
@@ -212,7 +212,7 @@ Install the analysis and notebook dependencies:
 python -m pip install -r requirements-dev.txt
 ```
 
-[requirements.txt](requirements.txt) pins modeling and reporting dependencies. [requirements-dev.txt](requirements-dev.txt) adds notebook execution and editing tools. The versions used to generate the committed models are recorded in [training_versions.txt](results/training_versions.txt).
+[requirements.txt](requirements.txt) pins modeling, reporting, and application dependencies. [requirements-dev.txt](requirements-dev.txt) adds notebook execution and editing tools. The versions used to generate the committed models are recorded in [training_versions.txt](results/training_versions.txt).
 
 ### Regenerate the outputs
 
@@ -229,15 +229,16 @@ To inspect or execute the notebook interactively:
 python -m jupyterlab model/Online_Shoppers_Model_Analysis.ipynb
 ```
 
-The source dataset is included, so a fresh clone does not depend on a separate download. `train_data.csv` is reproducible and ignored by Git; the labeled `test_data.csv` is tracked for evaluation and the planned application.
+The source dataset is included, so a fresh clone does not depend on a separate download. `train_data.csv` is reproducible and ignored by Git; the labeled `test_data.csv` is tracked for evaluation and the application.
 
 ### Validate existing artifacts
 
 ```bash
 python scripts/verify_artifacts.py
+python -m unittest discover -s tests -v
 ```
 
-Verification reloads the saved pipelines and checks their results against the recorded experiment. It also checks the notebook's formatted comparison table, embedded figures, and exported visual files. The [validation workflow](.github/workflows/validate.yml) runs this check in GitHub Actions. The experiment manifest and data-quality report retain provenance and split information for inspection.
+Artifact verification reloads the saved pipelines and checks their results against the recorded experiment. It also checks the notebook's formatted comparison table, embedded figures, and exported visual files. The application tests exercise dataset validation, model evaluation, and the Streamlit controls. The [validation workflow](.github/workflows/validate.yml) runs both checks in GitHub Actions. The experiment manifest and data-quality report retain provenance and split information for inspection.
 
 Serialized pipelines depend on their library versions. Use the pinned environment when loading the committed `.joblib` files. If dependencies change, regenerate the complete set of models and reports together; see scikit-learn's [model persistence guidance](https://scikit-learn.org/stable/model_persistence.html).
 
@@ -246,7 +247,11 @@ Serialized pipelines depend on their library versions. Use the pinned environmen
 | Path | Purpose |
 |---|---|
 | `README.md` | Problem, dataset, methods, findings, and reproduction instructions |
-| `requirements.txt` | Pinned modeling and reporting dependencies |
+| `app.py` | Streamlit interface for evaluating and comparing the five saved models |
+| `shopper_app/evaluation.py` | CSV validation, saved-pipeline loading, and evaluation calculations |
+| `shopper_app/charts.py` | Interactive charts for metrics, errors, and model comparisons |
+| `.streamlit/config.toml` | Application theme and server configuration |
+| `requirements.txt` | Pinned modeling, reporting, and application dependencies |
 | `requirements-dev.txt` | Notebook execution and editing dependencies |
 | `data/online_shoppers_intention.csv` | Original dataset for repeatable execution |
 | `data/README.md` | Dataset attribution, license, and checksum |
@@ -268,7 +273,9 @@ Serialized pipelines depend on their library versions. Use the pinned environmen
 | `scripts/notebook_visuals.py` | Shared styling and chart functions used by the notebook and exported reports |
 | `scripts/notebook_tables.py` | Consistent table images with expandable, selectable HTML values |
 | `scripts/verify_artifacts.py` | Checks saved models and reported results |
-| `.github/workflows/validate.yml` | Automated repository validation |
+| `tests/test_evaluation.py` | Validation edge cases and saved-model result checks |
+| `tests/test_app.py` | Streamlit interaction and displayed-result checks |
+| `.github/workflows/validate.yml` | Automated artifact verification and application tests |
 | `.gitignore`, `.gitattributes` | Exclude local files and keep file handling consistent |
 
 ## 9. Limitations and interpretation
@@ -280,11 +287,68 @@ Serialized pipelines depend on their library versions. Use the pinned environmen
 - **Historical scope.** A random split does not measure performance on a later period, another retailer, or changed shopping behavior.
 - **Model assumptions.** Gaussian Naive Bayes applies conditional independence and Gaussian assumptions to transformed features. Correlated activity measures and encoded categories may depart from those assumptions; probability calibration is not evaluated here.
 
-## 10. Next development stage
+## 10. Streamlit application
 
-The next stage is a Streamlit interface with labeled test CSV upload, selection among the five saved pipelines, the six metrics, and a confusion matrix or classification report. The entry point and deployment link will be added when that stage is implemented and verified.
+### Run locally
 
-The repository does not yet include a live application or evidence of execution in the BITS Virtual Lab. Those deliverables, followed by the final submission PDF, remain separate steps.
+From the repository root, with the Python 3.12 environment activated:
+
+```bash
+python -m pip install -r requirements.txt
+python -m streamlit run app.py
+```
+
+Open the local address printed in the terminal. No Streamlit account is needed for local execution. The application uses the committed fitted pipelines and does not train models during evaluation.
+
+### Evaluate a dataset
+
+1. Start with **Included test set** to reproduce the notebook's 2,466-session experiment. The Decision Tree is selected initially.
+2. Choose another classifier from **Prediction model** to update its six metrics, confusion matrix, classification report, and ranking curves.
+3. Choose **Upload a CSV** to evaluate a labeled test file. The included test CSV can also be downloaded from the interface and uploaded again.
+4. Use **Compare models** to evaluate all five classifiers on the current dataset. The comparison table and interactive 3D view show their tradeoffs on those same rows.
+5. Use **Session explorer** to inspect individual predictions and download the results as a CSV.
+
+| Area | What it provides |
+|---|---|
+| Overview | Accuracy, ROC AUC, precision, recall, F1, MCC, confusion matrix, classification report, and ranking curves |
+| Compare models | A shared-dataset comparison of all five classifiers, including a 3D metric view |
+| Session explorer | Actual outcomes, predicted outcomes, scores, correctness, and a prediction download |
+| About | Dataset context, evaluation choices, and interpretation guidance |
+
+The displayed scores are calculated from the selected dataset. The notebook comparison above remains the result for the original held-out split; an uploaded dataset may produce different values. SVM prediction scores are decision-function values, not purchase probabilities.
+
+### CSV requirements
+
+Upload a UTF-8 CSV with all **17 predictors plus `Revenue`**, using the column names in the included test file. Column order may differ. The upload limit is **5 MB and 5,000 rows**, intended for test data rather than a full training dataset.
+
+- `Revenue` and `Weekend` accept `True`/`False` or `1`/`0`, including differences in capitalization and surrounding spaces.
+- Numeric values must be finite and nonnegative. Page counts and categorical code fields must be integers; bounce rate, exit rate, and special-day proximity must be between 0 and 1.
+- Missing values, duplicate column names, missing required columns, and unexpected extra columns produce a validation message before evaluation.
+- A file containing only one outcome class can still be inspected. ROC AUC and MCC are shown as unavailable because the dataset does not support the usual two-class comparison.
+
+Uploaded CSVs are processed in the current session. The application does not save them to the repository or place them in a shared data cache. Only the packaged model pipelines are cached for reuse.
+
+### Deploy to Streamlit Community Cloud
+
+**Deployment status: not yet deployed.** The public application link will be added after deployment and a check of the hosted interface.
+
+Sign in to [Streamlit Community Cloud](https://share.streamlit.io/) and connect the GitHub account that can access this repository. Create an app with these settings:
+
+| Setting | Value |
+|---|---|
+| Repository | `akriti-adarsh/online-shopper-purchase-prediction` |
+| Branch | `main` |
+| Main file path | `app.py` |
+| Python version in Advanced settings | `3.12` |
+
+The app requires no service keys or secrets. After deployment, check all five models with the included test set, test the upload path, and confirm that the public link opens correctly. Streamlit's [official deployment guide](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy) describes the repository and Python-version settings.
+
+## 11. Remaining submission steps
+
+- Deploy the application, verify its public link, and add that link to this README.
+- Run the assignment in the BITS Virtual Lab and capture the required execution screenshot.
+- Prepare the final PDF in the required order: GitHub repository link, live application link, Virtual Lab screenshot, and complete README content.
+- Submit the PDF through the course portal and confirm the submission is finalized.
 
 ## References
 
