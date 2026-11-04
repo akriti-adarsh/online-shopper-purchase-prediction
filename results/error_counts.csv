@@ -1,0 +1,6 @@
+Model,True negatives,False positives,False negatives,True positives
+Logistic Regression,2035,49,245,137
+Decision Tree,1986,98,168,214
+k-Nearest Neighbors,2029,55,258,124
+Gaussian Naive Bayes,1277,807,80,302
+Support Vector Machine,2009,75,203,179

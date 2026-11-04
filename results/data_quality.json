@@ -1,0 +1,11 @@
+{
+  "source_rows": 12330,
+  "input_features": 17,
+  "missing_values": 0,
+  "duplicate_rows_beyond_first": 125,
+  "duplicate_feature_rows_beyond_first": 125,
+  "test_rows_with_features_also_in_training": 29,
+  "distinct_feature_vectors_shared_across_split": 22,
+  "overlapping_source_row_indices": 0,
+  "handling": "Original rows retained to reproduce the documented experiment."
+}
