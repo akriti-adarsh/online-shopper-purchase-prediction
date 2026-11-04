@@ -1,324 +1,514 @@
-"""Explore saved purchase classifiers on a shared, labeled evaluation dataset."""
+"""Shopper Signals: inspect saved purchase decisions through a retail ledger."""
 
 from hashlib import sha256
-from html import escape
-from pathlib import Path
+from uuid import uuid4
 
 import pandas as pd
 import streamlit as st
 
-from shopper_app.charts import (
-    COLORS, confusion_chart, curve_chart, performance_3d_chart,
-    purchase_outcomes_chart, ranking_chart,
-)
+from shopper_app.appearance import render_appearance
+from shopper_app.charts import curve_chart, performance_3d_chart, ranking_chart
 from shopper_app.evaluation import (
-    DataValidationError, FEATURE_COLUMNS, MODEL_DESCRIPTIONS, MODEL_FILES,
-    dataset_warnings, evaluate_model, load_pipeline, read_dataset,
+    FEATURE_COLUMNS,
+    FEATURE_LABELS,
+    MODEL_DESCRIPTIONS,
+    MODEL_FILES,
+    DataValidationError,
+    dataset_warnings,
+    evaluate_model,
+    load_pipeline,
+    model_metadata,
+    read_dataset,
+    schema_guide,
 )
+from shopper_app.explorer import (
+    FILTER_OPTIONS,
+    export_sessions,
+    filter_sessions,
+    paginate_sessions,
+    session_detail,
+)
+from shopper_app.presentation import (
+    ROOT,
+    brand,
+    coverage_bar,
+    finding,
+    formatted,
+    heading,
+    install_styles,
+    ledger_table,
+    text,
+)
+from shopper_app.session_table import session_table
 
-
-ROOT = Path(__file__).resolve().parent
 REPOSITORY = "https://github.com/akriti-adarsh/online-shopper-purchase-prediction"
+VIEWS = ["Overview", "Compare Models", "Session Explorer", "About"]
+METRIC_LABELS = {"Accuracy": "Accuracy", "AUC": "ROC AUC", "Precision": "Precision",
+                 "Recall": "Recall", "F1": "F1", "MCC": "MCC"}
+METRIC_HELP = {
+    "Accuracy": "All correctly classified sessions divided by all evaluated sessions. High accuracy can hide missed buyers.",
+    "AUC": "Area under the ROC curve, calculated from purchase scores. Requires scores and both observed classes.",
+    "Precision": "Of sessions flagged as purchases, the share that actually bought: TP / (TP + FP).",
+    "Recall": "Of actual buyers, the share identified: TP / (TP + FN).",
+    "F1": "Harmonic mean of purchase precision and recall. It balances these two measures equally.",
+    "MCC": "Correlation using all four outcomes. Range −1 to +1; higher is better. Unavailable here for one observed class.",
+}
 CHART_CONFIG = {"displaylogo": False, "scrollZoom": False,
                 "modeBarButtonsToRemove": ["lasso2d", "select2d"]}
+MODEL_VERSION = sha256((ROOT / "results/experiment_manifest.json").read_bytes()).hexdigest()
+SAMPLE_BYTES = (ROOT / "test_data.csv").read_bytes()
 
-st.set_page_config(page_title="Shopper Signals | Purchase Prediction", page_icon="🛍️", layout="wide")
-st.markdown("""
-<style>
-.block-container {max-width:1480px;padding-top:4.5rem;padding-bottom:3rem;}
-[data-testid="stSidebar"] {border-right:1px solid #e2e9f2;}
-[data-testid="stSidebar"] .block-container {padding-top:1.5rem;}
-.brand {display:flex;align-items:center;gap:12px;margin-bottom:26px;}
-.brand-mark {background:#087f8c;color:#fff;border-radius:12px;font-weight:800;
-             width:42px;height:42px;display:grid;place-items:center;font-size:20px;}
-.brand-name {font-size:20px;font-weight:750;color:#172b49;line-height:1.15;}
-.brand-sub {font-size:11px;color:#6a7c93;letter-spacing:1.6px;margin-top:4px;}
-.hero {background:linear-gradient(118deg,#132b49 0%,#1a4561 70%,#126d75 100%);
-       border-radius:22px;padding:30px 34px;color:#fff;position:relative;margin-bottom:22px;}
-.hero .eyebrow {font-size:11px;letter-spacing:2px;font-weight:750;color:#79e1d0;margin-bottom:10px;}
-.hero h1 {color:#fff;font-size:34px;line-height:1.15;letter-spacing:-.8px;margin:0 0 12px;padding:0;}
-.hero p {color:#d9e6f0;font-size:15px;line-height:1.6;max-width:760px;margin:0;}
-.hero-pills {display:flex;gap:9px;margin-top:22px;flex-wrap:wrap;}
-.hero-pills span {padding:5px 11px;background:#ffffff12;border:1px solid #ffffff22;
-                  border-radius:20px;font-size:11px;color:#e3f2f7;letter-spacing:.3px;}
-.dataset-strip {display:flex;gap:8px 24px;align-items:center;flex-wrap:wrap;background:white;
-                border:1px solid #e4eaf2;border-radius:12px;padding:13px 18px;margin-bottom:18px;
-                color:#65788e;font-size:13px;}
-.dataset-strip strong {color:#172b49;font-weight:700;}
-.model-heading {display:flex;align-items:center;gap:10px;font-size:21px;
-                font-weight:750;letter-spacing:-.4px;margin:8px 0;}
-.model-dot {width:10px;height:10px;border-radius:50%;display:inline-block;}
-[data-testid="stMetric"] {background:white;border:1px solid #e3eaf2;border-radius:13px;
-                         padding:15px 17px 14px;box-shadow:0 3px 10px #172b4903;}
-[data-testid="stMetricValue"] {font-size:28px;font-weight:700;letter-spacing:-.6px;}
-[data-testid="stMetricLabel"] {color:#62758c;font-size:12px;}
-.st-key-metric_grid [data-testid="stHorizontalBlock"] {display:grid;
-    grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;}
-.st-key-metric_grid [data-testid="stColumn"] {width:100%!important;min-width:0!important;}
-[data-testid="stTabs"] [data-baseweb="tab-list"] {gap:22px;border-bottom:1px solid #dfe6f0;}
-[data-testid="stTabs"] [data-baseweb="tab"] {font-size:14px;padding-top:14px;padding-bottom:14px;}
-.section-note {font-size:13px;color:#64778f;line-height:1.6;margin-bottom:10px;}
-.app-footer {color:#7b8ba0;font-size:12px;margin-top:26px;border-top:1px solid #e1e8f1;padding-top:14px;}
-@media(max-width:1100px) {
- .st-key-metric_grid [data-testid="stHorizontalBlock"] {grid-template-columns:repeat(3,minmax(0,1fr));}
-}
-@media(max-width:800px) {
- .block-container {padding:4.5rem 1rem 2rem;}
- .hero {padding:24px;}.hero h1 {font-size:27px;}
- [data-testid="stMetricValue"] {font-size:23px;}
-}
-@media(max-width:480px) {
- .st-key-metric_grid [data-testid="stHorizontalBlock"] {grid-template-columns:repeat(2,minmax(0,1fr));}
-}
-</style>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title="Shopper Signals · Purchase decisions", page_icon=str(ROOT / "assets/brand.svg"), layout="wide")
+install_styles()
+
+
+def set_focus(selector):
+    st.session_state.focus_request = {"token": uuid4().hex, "selector": selector}
+
+
+def reset_page():
+    st.session_state.session_page = 1
+
+
+def reset_filters():
+    st.session_state.outcome_filter = "All sessions"
+    st.session_state.session_search = ""
+    st.session_state.session_sort = "OriginalRow"
+    st.session_state.sort_direction = "Ascending"
+    reset_page()
+
+
+def open_explorer(category, cell=None):
+    st.session_state.view = "Session Explorer"
+    st.session_state.outcome_filter = category
+    st.session_state.session_search = ""
+    st.session_state.return_cell = cell
+    reset_page()
+    set_focus("#explorer-heading")
+
+
+def back_to_overview():
+    st.session_state.view = "Overview"
+    cell = st.session_state.get("return_cell")
+    set_focus(f".st-key-cell_{cell} button" if cell else "#overview-heading")
+
+
+def change_view():
+    set_focus({"Overview": "#overview-heading", "Compare Models": "#comparison-heading",
+               "Session Explorer": "#explorer-heading", "About": "#about-heading"}.get(st.session_state.view, "#overview-heading"))
+
+
+def activate_dataset(frame, name, kind):
+    identity = frame.attrs["dataset_fingerprint"]
+    if st.session_state.get("active_id") != identity:
+        st.session_state.active_id = identity
+        st.session_state.active_frame = frame
+        st.session_state.evaluations = {}
+        reset_filters()
+    st.session_state.dataset_name = name
+    st.session_state.dataset_kind = kind
 
 
 @st.cache_resource(show_spinner=False, max_entries=5)
-def model_resource(model_name):
-    """Cache only the packaged, read-only classifiers, never uploaded datasets."""
-    return load_pipeline(model_name, ROOT)
+def model_resource(name, artifact_version):
+    pipeline = load_pipeline(name, ROOT)
+    return pipeline, model_metadata(pipeline, name)
+
+
+def result_for(name):
+    pipeline, metadata = model_resource(name, MODEL_VERSION)
+    identity = st.session_state.active_id
+    cache_key = (identity, metadata["identity"])
+    if cache_key not in st.session_state.evaluations:
+        evaluated = evaluate_model(pipeline, st.session_state.active_frame)
+        if st.session_state.active_id != identity:
+            st.stop()
+        st.session_state.evaluations[cache_key] = evaluated
+    return st.session_state.evaluations[cache_key], metadata
 
 
 def plot(figure, key):
-    st.plotly_chart(figure, width="stretch", theme=None, key=key, config=CHART_CONFIG)
+    st.plotly_chart(figure, theme=None, width="stretch", config=CHART_CONFIG, key=key)
 
 
-def table_config(columns):
-    return {name: st.column_config.NumberColumn(name, format="%.4f") for name in columns}
+if "active_id" not in st.session_state:
+    activate_dataset(read_dataset(SAMPLE_BYTES), "Bundled test set", "bundled")
+for key, default in {"view": "Overview", "model_name": "Decision Tree", "dataset_source": "Bundled test set",
+                     "session_page": 1, "page_size": 25, "comparison_metric": "F1",
+                     "session_sort": "OriginalRow", "sort_direction": "Ascending",
+                     "outcome_filter": "All sessions", "session_search": "", "matrix_mode": "Count"}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
 
+# Keep conditional widgets' values when their destination is not being rendered.
+for key in ["outcome_filter", "session_search", "session_sort", "sort_direction",
+            "page_size", "comparison_metric", "matrix_mode"]:
+    if key in st.session_state:
+        st.session_state[key] = st.session_state[key]
 
-def result_for(model_name, frame):
-    if model_name not in st.session_state.evaluations:
-        st.session_state.evaluations[model_name] = evaluate_model(model_resource(model_name), frame)
-    return st.session_state.evaluations[model_name]
+with st.container(key="brand_row"):
+    brand_column, appearance_column = st.columns([4, 1])
+    with brand_column:
+        brand()
+    with appearance_column:
+        theme = render_appearance(st.session_state.get("focus_request"))
 
+with st.container(key="navigation"):
+    st.segmented_control("Navigation", VIEWS, key="view", label_visibility="collapsed",
+                         width="stretch", on_change=change_view)
 
-with st.sidebar:
-    st.markdown('''<div class="brand"><div class="brand-mark">S</div><div>
-        <div class="brand-name">Shopper Signals</div><div class="brand-sub">PURCHASE PREDICTION</div>
-        </div></div>''', unsafe_allow_html=True)
-    st.markdown("**01 · Choose your data**")
-    source = st.radio("Evaluation dataset", ["Included test set", "Upload a CSV"],
-                      key="dataset_source", label_visibility="collapsed")
-    sample_bytes = (ROOT / "test_data.csv").read_bytes()
-    if source == "Upload a CSV":
-        uploaded = st.file_uploader("Upload labeled test data", type=["csv"], key="dataset_upload",
-                                    help="Include all 17 features and Revenue. Up to 5 MB and 5,000 rows.")
-        payload = uploaded.getvalue() if uploaded is not None else None
-        dataset_name = uploaded.name if uploaded is not None else "Your CSV"
-    else:
-        payload = sample_bytes
-        dataset_name = "Included test set"
-        st.caption("2,466 held-out sessions from the notebook experiment.")
-    st.download_button("Download test CSV", sample_bytes, "test_data.csv", "text/csv",
-                       width="stretch", key="download_test")
-    st.divider()
-    st.markdown("**02 · Select a classifier**")
-    selected_model = st.selectbox("Prediction model", list(MODEL_FILES), index=1, key="model_name")
-    with st.expander("About this model"):
-        st.write(MODEL_DESCRIPTIONS[selected_model])
-    st.caption("Each model uses its saved decision rule and preprocessing.")
-    st.divider()
-    with st.expander("CSV requirements"):
-        st.write("Include these 17 features plus **Revenue**:")
-        st.code(", ".join([*FEATURE_COLUMNS, "Revenue"]), language=None, wrap_lines=True)
-        st.caption("Revenue and Weekend accept True/False or 1/0. Missing values are not accepted.")
-    st.link_button("View project on GitHub", REPOSITORY, width="stretch")
+with st.container(key="evaluation_header"):
+    model_column, settings_column = st.columns([3, 1], vertical_alignment="bottom")
+    with model_column:
+        selected_model = st.selectbox("Prediction model", list(MODEL_FILES), key="model_name")
+    with settings_column:
+        with st.popover("Evaluation settings", width="stretch", icon=":material/tune:"):
+            with st.container(key="dataset_settings"):
+                st.subheader("Evaluation settings")
+                source = st.radio("Dataset source", ["Bundled test set", "Upload CSV"], key="dataset_source")
+                if source == "Bundled test set":
+                    st.session_state.upload_error = None
+                    st.session_state.upload_attempt = None
+                    if st.session_state.dataset_kind != "bundled":
+                        activate_dataset(read_dataset(SAMPLE_BYTES), "Bundled test set", "bundled")
+                    st.caption("2,466 sessions held out from model training. Revenue contains the observed purchase outcome.")
+                else:
+                    uploaded = st.file_uploader("Upload session CSV", type=["csv"], key="dataset_upload",
+                                                help="Up to 5 MB and 5,000 rows. Revenue is optional for predictions.")
+                    if uploaded is None:
+                        st.session_state.upload_error = None
+                        st.session_state.upload_attempt = None
+                        st.info("Choose a CSV. Your current valid dataset stays active until a new file passes validation.")
+                    else:
+                        payload = uploaded.getvalue()
+                        attempt = sha256(payload).hexdigest()
+                        if st.session_state.get("upload_attempt") != attempt:
+                            st.session_state.upload_attempt = attempt
+                            try:
+                                candidate = read_dataset(payload, require_target=False)
+                                st.session_state.valid_upload = (attempt, candidate, uploaded.name)
+                                st.session_state.upload_error = None
+                            except DataValidationError as error:
+                                st.session_state.upload_error = str(error)
+                        accepted = st.session_state.get("valid_upload")
+                        if accepted and accepted[0] == attempt:
+                            activate_dataset(accepted[1], uploaded.name, "uploaded")
+                            st.success(f"Active: {uploaded.name} · {len(accepted[1]):,} validated sessions")
+                        elif st.session_state.get("upload_error"):
+                            st.error(st.session_state.upload_error)
+                            st.caption(f"Still using {st.session_state.dataset_name}. Correct the file and upload it again.")
+                st.download_button("Download test CSV", SAMPLE_BYTES, "test_data.csv", "text/csv", width="stretch", key="download_test")
+                with st.expander("CSV requirements"):
+                    st.write("All 17 features are required. Include Revenue to evaluate accuracy and buyer outcomes, or omit it for predictions only. Column order may differ.")
+                    ledger_table(schema_guide(), "Accepted fields and validation rules")
+                    st.download_button("Download schema guide", schema_guide().to_csv(index=False).encode("utf-8"),
+                                       "shopper_schema.csv", "text/csv", key="download_schema")
+                with st.expander("Preview active data"):
+                    ledger_table(st.session_state.active_frame.head(5), "First five validated input rows")
+                with st.expander("About the selected model"):
+                    st.write(MODEL_DESCRIPTIONS[selected_model])
 
-st.markdown('''<div class="hero"><div class="eyebrow">MACHINE LEARNING · MODEL EXPLORER</div>
-    <h1>Understand the sessions<br>that turn into purchases.</h1>
-    <p>Explore five classifiers on the same shopping sessions. See which buyers they identify,
-    where they make mistakes, and how the tradeoffs change.</p>
-    <div class="hero-pills"><span>5 CLASSIFIERS</span><span>6 EVALUATION METRICS</span>
-    <span>ONE SHARED DATASET</span></div></div>''', unsafe_allow_html=True)
-
-if payload is None:
-    st.info("Upload a labeled CSV from the sidebar to begin, or choose the included test set.")
-    st.stop()
+frame = st.session_state.active_frame
+dataset_name = st.session_state.dataset_name
+labeled = "Revenue" in frame
+buyer_count = int(frame["Revenue"].sum()) if labeled else None
+class_text = f"{buyer_count:,} actual buyers · {buyer_count/len(frame):.2%} prevalence" if labeled else "Observed outcomes not provided"
+st.html(f'<div class="context-line"><span>DATA <strong>{text(dataset_name)}</strong></span>'
+        f'<span><strong>{len(frame):,}</strong> sessions</span><span>{class_text}</span>'
+        '<span>Positive class <strong>Purchase</strong></span></div>')
+if source == "Upload CSV" and st.session_state.get("upload_error"):
+    st.error(f"The new upload was rejected. {st.session_state.upload_error} Your last valid dataset ({dataset_name}) remains active.")
 
 try:
-    frame = read_dataset(payload)
-except DataValidationError as error:
-    st.error(f"We could not evaluate this CSV. {error}")
-    st.info("Download the test CSV in the sidebar for a valid example.")
-    st.stop()
-
-data_token = sha256(payload).hexdigest()
-if st.session_state.get("data_token") != data_token:
-    st.session_state.data_token = data_token
-    st.session_state.evaluations = {}
-    st.session_state.comparison_ready = False
-
-actual_purchases = int(frame["Revenue"].sum())
-st.markdown(f'''<div class="dataset-strip"><strong>{escape(dataset_name)}</strong>
-    <span><strong>{len(frame):,}</strong> sessions</span>
-    <span><strong>{actual_purchases:,}</strong> actual purchases</span>
-    <span><strong>{actual_purchases / len(frame):.2%}</strong> purchase rate</span>
-    <span><strong>17</strong> features</span></div>''', unsafe_allow_html=True)
-
-warnings = dataset_warnings(frame)
-if warnings:
-    with st.expander(f"Dataset notes ({len(warnings)})"):
-        for message in warnings:
-            st.write(f"• {message}")
-
-try:
-    with st.spinner("Evaluating the selected model..."):
-        result = result_for(selected_model, frame)
+    with st.spinner("Evaluating the selected model…"):
+        result, metadata = result_for(selected_model)
 except (ValueError, OSError, KeyError) as error:
-    st.error("The selected saved model could not be evaluated. Check the project files and pinned dependencies.")
+    st.error("Evaluation could not be completed. The valid dataset is retained. Restore the packaged model files and pinned dependencies, then retry.")
     st.caption(str(error))
     st.stop()
 
-st.markdown(f'<div class="model-heading"><span class="model-dot" style="background:{COLORS[selected_model]}"></span>'
-            f'{escape(selected_model)}</div>', unsafe_allow_html=True)
-st.caption("Current dataset · Purchase is the positive class · Original model decision rule")
-metric_help = {
-    "Accuracy": "Share of all sessions classified correctly.",
-    "AUC": "ROC area under the curve measures ranking across thresholds. Requires both outcome classes.",
-    "Precision": "Share of purchase alerts that are actual purchases.",
-    "Recall": "Share of actual buyers identified.",
-    "F1": "Harmonic mean of purchase precision and recall.",
-    "MCC": "Correlation using all four confusion counts, from -1 to 1. Requires both outcome classes here.",
-}
-with st.container(key="metric_grid"):
-    for column, (name, value) in zip(st.columns(6), result["metrics"].items()):
-        with column:
-            st.metric("ROC AUC" if name == "AUC" else name,
-                      "—" if value is None else f"{value:.4f}", help=metric_help[name])
-if result["metrics"]["AUC"] is None:
-    st.info("This dataset contains one outcome class. ROC AUC and MCC are unavailable; the other metrics and counts remain visible.")
 
-overview, comparison_tab, explorer, about = st.tabs(["Overview", "Compare models", "Session explorer", "About"])
-with overview:
-    left, right = st.columns([1, 1])
-    with left, st.container(border=True):
-        st.subheader("Every prediction, accounted for", divider=False)
-        st.caption("Actual outcomes on rows. Predicted outcomes on columns.")
-        plot(confusion_chart(result["confusion"]), "confusion")
-    with right, st.container(border=True):
-        st.subheader("Buyer coverage & false alerts", divider=False)
-        tn, fp, fn, tp = result["confusion"].ravel()
-        st.caption(f"{tp:,} buyers identified · {fn:,} buyers missed · {fp:,} false alerts")
-        plot(purchase_outcomes_chart(result["confusion"]), "purchase_outcomes")
-    with st.container(border=True):
-        st.subheader("Performance across score thresholds")
-        st.caption("These curves describe ranking. They do not change the predictions or tune a threshold.")
-        roc_tab, pr_tab, report_tab = st.tabs(["ROC curve", "Precision–recall curve", "Classification report"])
-        with roc_tab:
-            if result["metrics"]["AUC"] is not None:
-                plot(curve_chart(result["y_true"], result["scores"], selected_model, "roc"), "roc")
-            else:
-                st.info("A ROC curve needs both purchase and nonpurchase outcomes.")
-        with pr_tab:
-            if result["metrics"]["AUC"] is not None:
-                plot(curve_chart(result["y_true"], result["scores"], selected_model, "pr"), "pr")
-                st.caption("Average precision is a supplemental summary; the six required metrics remain above.")
-            else:
-                st.info("Upload both outcome classes for a meaningful precision-recall comparison.")
+def render_metrics():
+    with st.container(key="metric_grid"):
+        for column, (metric, value) in zip(st.columns(6), result["metrics"].items()):
+            with column:
+                st.metric(METRIC_LABELS[metric], "—" if value is None else f"{value:.4f}", help=METRIC_HELP[metric])
+    with st.popover("How to read these metrics"):
+        for metric, explanation in METRIC_HELP.items():
+            st.markdown(f"**{METRIC_LABELS[metric]}** — {explanation}")
+        st.caption("Higher is better for all six metrics. Accuracy, AUC, precision, recall, and F1 range from 0 to 1. MCC ranges from −1 to 1. A dash means unavailable.")
+        st.caption("Headline precision, recall, and F1 retain the notebook's zero-for-undefined convention. The detailed report marks undefined values unavailable.")
+
+
+def render_matrix():
+    heading("Every decision, accounted for", "01 / OUTCOMES")
+    st.caption("Actual outcomes on rows. Predicted outcomes on columns. Select a cell to inspect its sessions.")
+    mode = st.segmented_control("Matrix values", ["Count", "% of actual class"], key="matrix_mode")
+    matrix = result["confusion"]
+    with st.container(key="matrix_grid"):
+        st.html('<div class="matrix-axis"><span>Predicted: no purchase</span><span>Predicted: purchase</span></div>')
+        for row, actual in enumerate(["No purchase", "Purchase"]):
+            st.html(f'<div class="matrix-row-label">Actual: {text(actual)}</div>')
+            cells = st.columns(2)
+            for col, container in enumerate(cells):
+                code, category = [[("tn", "Correct non-buyers"), ("fp", "False alerts")],
+                                  [("fn", "Missed buyers"), ("tp", "Identified buyers")]][row][col]
+                count = int(matrix[row, col])
+                denominator = int(matrix[row].sum())
+                value = f"{count:,}" if mode != "% of actual class" else (f"{count/denominator:.1%}" if denominator else "Unavailable")
+                suffix = f"{code.upper()} · {count:,} sessions" if mode == "% of actual class" else code.upper()
+                with container:
+                    st.button(f"**{value}**\n\n{category}\n\n{suffix}", width="stretch", key=f"cell_{code}",
+                              on_click=open_explorer, args=(category, code))
+    st.caption("Each percentage divides the cell count by its actual-class row total. A row with no observations is unavailable."
+               if mode == "% of actual class" else f"All four outcomes add up to {int(matrix.sum()):,} evaluated sessions.")
+
+
+def render_coverage():
+    heading("Finding buyers. Earning trust.", "02 / COVERAGE")
+    st.caption("Two denominators reveal the difference between recall and precision.")
+    tn, fp, fn, tp = map(int, result["confusion"].ravel())
+    coverage_bar("Actual buyers · recall", "Of the people who bought, how many did we find?", tp, fn, "Missed", "missed")
+    coverage_bar("Purchase alerts · precision", "Of the sessions flagged as purchases, how many were correct?", tp, fp, "False alerts", "false")
+    a, b = st.columns(2)
+    with a:
+        st.button(f"Inspect {fn:,} missed buyers", on_click=open_explorer, args=("Missed buyers", "fn"), key="inspect_missed", width="stretch")
+    with b:
+        st.button(f"Inspect {fp:,} false alerts", on_click=open_explorer, args=("False alerts", "fp"), key="inspect_false", width="stretch")
+
+
+def overview():
+    st.html('<h1 id="overview-heading" tabindex="-1">The purchase ledger</h1>')
+    finding(result, len(frame))
+    render_metrics()
+    notes = dataset_warnings(frame)
+    if notes:
+        with st.expander(f"Dataset notes · {len(notes)}"):
+            for note in notes:
+                st.write(note)
+    if not labeled:
+        st.info("This feature-only dataset supports predictions and scores. Add observed Revenue values for evaluation metrics, confusion counts, and ranking curves.")
+        st.button("Explore predictions", on_click=open_explorer, args=("All sessions",), type="primary", key="explore_unlabeled")
+        return
+    if frame["Revenue"].nunique() < 2:
+        st.info("Only one outcome class is present. ROC AUC and MCC are unavailable. Counts and predictions remain available.")
+    with st.container(key="outcome_row"):
+        left, right = st.columns(2)
+        with left, st.container(key="panel_matrix"):
+            render_matrix()
+        with right, st.container(key="panel_coverage"):
+            render_coverage()
+    with st.container(key="panel_curves"):
+        heading("Beyond one decision rule", "03 / RANKING")
+        st.caption("The saved model's predictions stay fixed. Curves show how its scores rank sessions across possible thresholds.")
+        roc_tab, pr_tab, report_tab = st.tabs(["ROC curve", "Precision–recall", "Classification report"])
+        for tab, kind in [(roc_tab, "roc"), (pr_tab, "pr")]:
+            with tab:
+                st.write("ROC compares buyer recall with the false-positive rate among actual non-buyers. The diagonal is chance ranking."
+                         if kind == "roc" else "Precision–recall focuses on buyers. Its baseline is observed buyer prevalence; AP means average precision.")
+                if result["metrics"]["AUC"] is None:
+                    st.info("A meaningful ranking curve needs both observed classes and available model scores.")
+                else:
+                    plot(curve_chart(result["y_true"], result["scores"], selected_model, kind,
+                                     confusion=result["confusion"], operating_point=result["operating_point"],
+                                     positive_label=result["positive_class"], theme=theme), f"curve_{kind}")
+                    point = result["operating_point"]
+                    if point:
+                        precision_text = f"{point['precision']:.2%}" if point["precision"] is not None else "unavailable"
+                        st.caption(f"Saved rule: recall {point['recall']:.2%} · false-positive rate {point['fpr']:.2%} · precision {precision_text}")
+                        with st.expander("Operating point values · text equivalent"):
+                            ledger_table(pd.DataFrame([{"Recall": point["recall"], "False-positive rate": point["fpr"],
+                                                       "Precision": point["precision"]}]), "Actual saved prediction rule",
+                                         numeric_columns=["Recall", "False-positive rate", "Precision"])
         with report_tab:
-            st.dataframe(result["report"], width="stretch",
-                         column_config={**table_config(["precision", "recall", "f1-score"]),
-                                        "support": st.column_config.NumberColumn("Sessions", format="%d")})
-            st.caption("Support is the number of actual sessions in each class. Undefined precision or recall is reported as zero.")
+            report = result["report"].rename(columns={"precision": "Precision", "recall": "Recall", "f1-score": "F1", "support": "Support"})
+            report.index.name = "Class / average"
+            ledger_table(report, "Class-level performance and averages", index=True, numeric_columns=["Precision", "Recall", "F1", "Support"])
+            st.caption("Support is the number of observed sessions in each class. A dash marks an undefined value; averages exclude undefined terms where applicable.")
 
-with comparison_tab:
-    st.subheader("Find the tradeoff that fits")
-    st.write("Compare all five saved classifiers on the currently selected dataset. Purchase F1 is the primary ranking measure, with MCC as a tiebreaker.")
-    if st.button("Compare all five models", type="primary", key="compare_models"):
-        try:
-            with st.spinner("Evaluating all five classifiers..."):
-                for name in MODEL_FILES:
-                    result_for(name, frame)
-            st.session_state.comparison_ready = True
-        except (ValueError, OSError, KeyError) as error:
-            st.error(f"Comparison could not be completed. {error}")
-    if st.session_state.comparison_ready:
-        comparison = pd.DataFrame({name: st.session_state.evaluations[name]["metrics"] for name in MODEL_FILES}).T
-        comparison.index.name = "Model"
-        ranked = comparison.sort_values(["F1", "MCC"], ascending=False, na_position="last")
-        if frame["Revenue"].nunique() == 2:
-            best = ranked.index[0]
-            st.success(f"Highest purchase F1 on this dataset: {best} · {ranked.iloc[0]['F1']:.4f}")
-        else:
-            st.info("Both outcome classes are needed for a balanced model comparison.")
-        st.dataframe(ranked, width="stretch", column_config=table_config(comparison.columns))
-        c1, c2 = st.columns([1, 1])
-        with c1, st.container(border=True):
-            st.markdown("**Purchase F1 by model**")
-            plot(ranking_chart(comparison), "ranking")
-        with c2, st.container(border=True):
-            st.markdown("**Explore the performance space**")
-            st.caption("Drag to rotate · Use the chart controls to zoom · Hover for exact values")
-            if frame["Revenue"].nunique() == 2:
-                plot(performance_3d_chart(comparison), "performance_3d")
-            else:
-                st.info("The 3D view needs defined MCC values from both outcome classes.")
-        st.download_button("Download comparison CSV", ranked.to_csv().encode("utf-8"),
-                           "model_comparison.csv", "text/csv", key="download_comparison")
-        st.caption("A winner on one dataset does not establish performance on future traffic. Selection and tuning require a separate validation process.")
+
+def comparison_view():
+    st.html('<h1 id="comparison-heading" tabindex="-1">Choose the tradeoff</h1>')
+    st.write("Five saved classifiers. The same sessions. Their original decision rules.")
+    if not labeled:
+        st.info("Observed Revenue values are required to compare evaluation metrics. You can still switch models and inspect their predictions in Session Explorer.")
+        return
+    all_results = {}
+    try:
+        with st.spinner("Comparing all five models on the active dataset…"):
+            for name in MODEL_FILES:
+                all_results[name] = result_for(name)[0]
+    except (ValueError, OSError, KeyError) as error:
+        st.error(f"Comparison could not finish. The current evaluation is retained. {error}")
+        return
+    comparison = pd.DataFrame({name: item["metrics"] for name, item in all_results.items()}).T
+    comparison.index.name = "Model"
+    metric = st.selectbox("Rank by metric", list(METRIC_LABELS), format_func=METRIC_LABELS.get, key="comparison_metric")
+    st.caption(METRIC_HELP[metric] + " Higher is better. Equal values share the same rank.")
+    ranked = comparison.sort_values(metric, ascending=False, kind="stable", na_position="last")
+    display = ranked.copy()
+    display.insert(0, "Rank", ranked[metric].rank(method="min", ascending=False).astype("Int64"))
+    display = display.rename(columns={"AUC": "ROC AUC"})
+    with st.container(key="panel_comparison"):
+        ledger_table(display, f"All models ranked by {METRIC_LABELS[metric]} · selected model highlighted", index=True,
+                     selected=selected_model, numeric_columns=list(display.columns))
+        plot(ranking_chart(comparison, metric, selected_model, theme=theme), "metric_ranking")
+    coverage_name = comparison["Recall"].idxmax()
+    alert_counts = {name: int(item["confusion"][0, 1]) for name, item in all_results.items()}
+    cautious_name = min(alert_counts, key=alert_counts.get)
+    high = all_results[coverage_name]["confusion"]
+    low = all_results[cautious_name]["confusion"]
+    if buyer_count:
+        st.info(f"{coverage_name} identifies {int(high[1,1]):,} of {buyer_count:,} buyers with {int(high[0,1]):,} false alerts. "
+                f"{cautious_name} produces {int(low[0,1]):,} false alerts and identifies {int(low[1,1]):,} buyers on these same rows.")
     else:
-        st.info("Run the comparison to see all six metrics, an F1 ranking, and an interactive 3D view.")
+        st.info("This dataset contains no observed buyers. Buyer coverage cannot establish a model preference.")
+    with st.expander("Explore the 3D performance space"):
+        if comparison[["Precision", "Recall", "MCC"]].notna().all().all():
+            st.caption("Drag to rotate. Use the table above as the keyboard-accessible equivalent for exact values.")
+            plot(performance_3d_chart(comparison, selected_model, theme=theme), "comparison_3d")
+        else:
+            st.info("The 3D comparison needs defined precision, recall, and MCC values.")
+    st.download_button("Download comparison CSV", display.to_csv().encode("utf-8"), "model_comparison.csv", "text/csv", key="download_comparison")
+    st.caption("These results describe this dataset. Selecting a model and tuning settings requires a separate validation process before a final untouched evaluation.")
 
-with explorer:
-    st.subheader("Look beyond the averages")
-    st.caption("Inspect individual outcomes and download every prediction from the selected model.")
-    predictions = result["predictions"].copy()
-    predictions.insert(0, "SessionRow", range(1, len(predictions) + 1))
-    prediction_filter = st.selectbox("Show sessions", ["All sessions", "Correct predictions", "False purchase alerts", "Missed purchases"], key="prediction_filter")
-    filters = {
-        "All sessions": pd.Series(True, index=predictions.index),
-        "Correct predictions": predictions["Correct"],
-        "False purchase alerts": ~predictions["Revenue"] & predictions["PredictedRevenue"],
-        "Missed purchases": predictions["Revenue"] & ~predictions["PredictedRevenue"],
-    }
-    visible = predictions.loc[filters[prediction_filter]]
-    st.caption(f"Showing {len(visible):,} of {len(predictions):,} sessions · Score: {result['score_label']}")
+
+def close_detail():
+    identifier = st.session_state.get("detail_id")
+    if identifier:
+        set_focus(f'button[data-session="{identifier}"]')
+
+
+def outcome_word(value):
+    return "Unavailable" if value is None else ("Purchase" if bool(value) else "No purchase")
+
+
+@st.dialog("Session detail", width="large", on_dismiss=close_detail)
+def show_detail(identifier):
+    try:
+        row = session_detail(result["predictions"], identifier)
+    except KeyError:
+        st.info("That session is no longer in the active dataset. Close this panel and choose another row.")
+        return
+    st.session_state.detail_id = identifier
+    st.html(f'<p class="mono">{text(identifier)} · original data row {int(row["OriginalRow"]):,}</p>')
+    st.html(f'<div class="detail-summary"><div><small>Observed</small><strong>{outcome_word(row.get("Revenue"))}</strong></div>'
+            f'<div><small>Predicted</small><strong>{outcome_word(row["PredictedRevenue"])}</strong></div>'
+            f'<div><small>{text(result["score_label"])}</small><strong>{formatted(row["PredictionScore"], True)}</strong></div></div>')
+    st.write(f"**Outcome:** {row['ResultCategory']}")
     if result["score_label"] == "Decision score":
-        st.info("SVM decision scores are uncalibrated ranking values, not purchase probabilities. Positive scores lie on the purchase side of its decision boundary.")
-    shown_columns = ["SessionRow", "Revenue", "PredictedRevenue", "Correct", "PredictionScore", "PageValues", "ProductRelated", "Month", "VisitorType"]
-    st.dataframe(visible[shown_columns], hide_index=True, width="stretch",
-                 column_config={
-                     "SessionRow": st.column_config.NumberColumn("Row", format="%d"),
-                     "Revenue": st.column_config.CheckboxColumn("Actual purchase"),
-                     "PredictedRevenue": st.column_config.CheckboxColumn("Predicted purchase"),
-                     "Correct": st.column_config.CheckboxColumn("Correct"),
-                     "PredictionScore": st.column_config.NumberColumn(result["score_label"], format="%.4f"),
-                 })
-    st.download_button("Download all predictions", predictions.to_csv(index=False).encode("utf-8"),
-                       selected_model.lower().replace(" ", "_") + "_predictions.csv", "text/csv", key="download_predictions")
-    with st.expander("Preview all input features"):
-        st.dataframe(frame.head(100), hide_index=True, width="stretch")
-        st.caption("Preview limited to the first 100 rows. Evaluation uses every validated row.")
+        st.caption("This SVM score is an uncalibrated ranking value, not a purchase probability. Positive scores lie on the purchase side of the boundary.")
+    details = pd.DataFrame([{"Feature": FEATURE_LABELS[name], "Column": name, "Value": str(row[name])} for name in FEATURE_COLUMNS])
+    ledger_table(details, "Original features supplied to the saved preprocessing pipeline")
+    st.caption("These are the recorded input features. No per-session feature contributions are claimed.")
+    if st.button("Back to sessions", key="close_detail", type="primary"):
+        close_detail()
+        st.rerun()
 
-with about:
-    st.subheader("A transparent model comparison")
-    st.markdown("""
-This project predicts whether a recorded online shopping session ends in a purchase.
-All five classifiers share the same original stratified 80/20 split and use saved
-preprocessing fitted only on training rows. The app evaluates existing pipelines;
-it does not fit them to an uploaded file.
 
-**Data:** UCI Online Shoppers Purchasing Intention Dataset — 12,330 sessions and
-17 predictors. Revenue is the purchase outcome. The included test set contains
-2,466 sessions, including 382 purchases.
+def explorer_view():
+    requested_detail = None
+    st.html('<h1 id="explorer-heading" tabindex="-1">Inspect the sessions</h1>')
+    st.button("Back to overview", on_click=back_to_overview, key="back_to_overview", icon=":material/arrow_back:")
+    st.caption("Search recorded features or a session ID. Select an ID to open its original inputs and prediction.")
+    filters = st.columns([2, 3, 1])
+    with filters[0]:
+        category = st.selectbox("Outcome filter", FILTER_OPTIONS, key="outcome_filter", on_change=reset_page)
+    with filters[1]:
+        query = st.text_input("Search sessions", key="session_search", placeholder="Session ID, month, visitor type…", on_change=reset_page)
+    with filters[2]:
+        st.button("Reset filters", on_click=reset_filters, key="reset_filters", width="stretch")
+    sort_labels = {"OriginalRow": "Original row", "SessionID": "Session ID", "PredictionScore": result["score_label"],
+                   "PredictedRevenue": "Predicted outcome", "ResultCategory": "Outcome category"}
+    if labeled:
+        sort_labels["Revenue"] = "Observed outcome"
+    if st.session_state.session_sort not in sort_labels:
+        st.session_state.session_sort = "OriginalRow"
+    controls = st.columns([2, 1, 1])
+    with controls[0]:
+        sort = st.selectbox("Sort by", list(sort_labels), format_func=sort_labels.get, key="session_sort", on_change=reset_page)
+    with controls[1]:
+        direction = st.selectbox("Direction", ["Ascending", "Descending"], key="sort_direction", on_change=reset_page)
+    with controls[2]:
+        size = st.selectbox("Rows per page", [10, 25, 50, 100], key="page_size", on_change=reset_page)
+    filtered = filter_sessions(result["predictions"], category, query, sort, direction == "Ascending")
+    page = paginate_sessions(filtered, int(st.session_state.session_page), int(size))
+    st.session_state.session_page = page["page"]
+    st.caption(f"{len(filtered):,} matching sessions of {len(frame):,} · {category} · Score: {result['score_label']}")
+    if result["score_label"] == "Decision score":
+        st.info("SVM decision scores are uncalibrated ranking values, not purchase probabilities.")
+    if filtered.empty:
+        st.info("No sessions match these filters. The active dataset is valid; reset the filters or change your search.")
+        return
+    with st.container(key="panel_explorer"):
+        interaction = session_table(page["rows"], result["score_label"],
+                                    f"Rows {page['start']:,}–{page['end']:,} of {page['count']:,} matching sessions",
+                                    sort, direction == "Ascending")
+        if interaction.sort and interaction.sort in sort_labels:
+            st.session_state.pending_sort = interaction.sort
+            st.rerun()
+        if interaction.selected:
+            requested_detail = interaction.selected
+    previous, page_label, next_page = st.columns([1, 2, 1])
+    with previous:
+        st.button("Previous page", disabled=page["page"] <= 1, on_click=lambda: st.session_state.update(session_page=page["page"] - 1), key="previous_page", width="stretch")
+    with page_label:
+        st.caption(f"Page {page['page']} of {page['pages']} · {size} rows per page")
+    with next_page:
+        st.button("Next page", disabled=page["page"] >= page["pages"], on_click=lambda: st.session_state.update(session_page=page["page"] + 1), key="next_page", width="stretch")
+    st.download_button(f"Export {len(filtered):,} filtered predictions", export_sessions(filtered),
+                       "shopper_filtered_predictions.csv", "text/csv", key="download_predictions", type="primary")
+    with st.expander("Choose a session using the keyboard"):
+        identifier = st.selectbox("Session on this page", page["rows"]["SessionID"].tolist(), key="detail_picker")
+        if st.button("Open session detail", key="open_detail"):
+            requested_detail = identifier
+    if requested_detail:
+        show_detail(requested_detail)
 
-**Interpretation:** purchase F1 balances precision and recall. The Decision Tree
-ranked highest in the original notebook. A different upload may produce a different
-ranking. Use truly held-out labeled data when assessing generalization.
 
-**Limitations:** one split does not measure uncertainty or future performance.
-The source contains repeated rows; 29 test rows share feature values with training
-rows. PageValues and accumulated session activity require a prediction-time review
-before early-session use.
+def about_view():
+    st.html('<h1 id="about-heading" tabindex="-1">Behind the ledger</h1>')
+    with st.container(key="panel_about"):
+        st.markdown("""
+### What a session means
+A session is one recorded visit to an online shop. A purchase means the visit ended in a transaction: **Revenue = True**. The other class is a visit without a purchase.
 
-**Uploaded data:** files are processed for the current app session and are not
-written to the repository. Only the packaged model objects are shared in the cache.
+### One experiment, five perspectives
+Logistic Regression, Decision Tree, k-Nearest Neighbors, Gaussian Naive Bayes, and Support Vector Machine share a stratified 80/20 split of the UCI Online Shoppers Purchasing Intention Dataset. The source contains **12,330 sessions and 17 features**. The bundled holdout contains **2,466 sessions, including 382 buyers**.
+
+Each saved pipeline encodes categories and scales numerical features using transformations fitted only on training rows. The application calls the saved model's prediction rule; it never trains on an upload. Purchase probabilities or SVM decision scores are used for ranking curves and ROC AUC. SVM scores are not calibrated probabilities.
+
+### Read the tradeoffs
+The Decision Tree has the highest purchase F1 in the original experiment. F1 balances precision and recall; MCC uses all four outcomes. Accuracy alone can hide missed buyers because most sessions do not end in a purchase. Model comparisons always use the same active dataset.
+
+### Where the evidence ends
+One split does not establish uncertainty or future performance. The source includes 125 exact duplicate rows; 29 test rows share feature values with training rows. PageValues and accumulated activity need a prediction-time review before early-session use. No causal claims or individual feature contributions are inferred here.
+
+### Your uploaded data
+Uploads and evaluation results belong to the current app session and are not written to the repository or shared in a data cache. Only trusted packaged model objects are cached across sessions. Invalid uploads preserve the last valid dataset. Session identifiers retain each original row through filtering, paging, and export.
 """)
-    st.link_button("Read the methods, notebook, and results", REPOSITORY)
-    st.markdown("[Dataset attribution and license](https://doi.org/10.24432/C5F88Q) · "
-                "Sakar, C. & Kastro, Y. (2018), CC BY 4.0")
+        ledger_table(pd.DataFrame([{"Stage": "Input", "What happens": "17 recorded session features; Revenue is reserved for evaluation"},
+                                  {"Stage": "Preprocessing", "What happens": f"Saved scaling and encoding produce {metadata['transformed_feature_count']} features"},
+                                  {"Stage": "Prediction", "What happens": f"{selected_model} applies its original fitted decision rule"},
+                                  {"Stage": "Evaluation", "What happens": "Predictions are compared with observed outcomes; scores produce ranking metrics"}]),
+                     "Trace one session through the pipeline")
+        st.html(f'<div class="receipt">ACTIVE MODEL <strong>{text(selected_model)}</strong><br>'
+                f'<span class="mono">Model {metadata["model_fingerprint"][:12]} · Preprocessing {metadata["preprocessing_fingerprint"][:12]}<br>'
+                f'Dataset {st.session_state.active_id[:12]}</span></div>')
+        st.link_button("Project, notebook & verified results", REPOSITORY, width="stretch")
+        st.markdown("Dataset: Sakar, C. & Kastro, Y. (2018). [UCI Online Shoppers Purchasing Intention](https://doi.org/10.24432/C5F88Q), CC BY 4.0.")
 
-st.markdown('<div class="app-footer">SHOPPER SIGNALS · Recorded sessions, measurable outcomes · '
-            'Machine Learning Assignment 2</div>', unsafe_allow_html=True)
+
+if st.session_state.get("pending_sort"):
+    pending = st.session_state.pop("pending_sort")
+    st.session_state.sort_direction = ("Descending" if st.session_state.session_sort == pending and
+                                       st.session_state.sort_direction == "Ascending" else "Ascending")
+    st.session_state.session_sort = pending
+    reset_page()
+
+view = st.session_state.view or "Overview"
+with st.container(key="results"):
+    {"Overview": overview, "Compare Models": comparison_view,
+     "Session Explorer": explorer_view, "About": about_view}[view]()
+st.html('<footer class="app-footer"><span>SHOPPER SIGNALS · Machine Learning Assignment 2</span>'
+        '<span>Recorded sessions. Inspectable decisions.</span></footer>')
