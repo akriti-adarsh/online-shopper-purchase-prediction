@@ -27,3 +27,5 @@ jobs:
         run: python -m pip install -r requirements-dev.txt
       - name: Verify saved models and published results
         run: python scripts/verify_artifacts.py
+      - name: Test dataset validation and application behavior
+        run: python -m unittest discover -s tests -v
