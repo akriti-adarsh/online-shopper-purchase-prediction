@@ -138,6 +138,8 @@ A false positive is a nonpurchase session labeled as a purchase. A false negativ
 
 ## 6. Visual results
 
+The notebook presents seven coordinated visual summaries, formatted data and metric tables, and expanded explanations of each model's strengths and tradeoffs. The 3D views supplement the exact tables and flat comparison charts; the model configurations, split, and six required evaluation metrics remain the same.
+
 ### Class distribution
 
 ![Class distribution showing purchase and nonpurchase sessions](results/class_balance.png)
@@ -150,17 +152,35 @@ The minority purchase class makes precision and recall essential companions to a
 
 The comparison highlights the Decision Tree's balance and Gaussian Naive Bayes' recall tradeoff.
 
+### Model performance in three dimensions
+
+![Three-dimensional comparison of model precision, recall, and Matthews correlation coefficient](results/model_landscape_3d.png)
+
+Each point represents one fitted model: precision is the horizontal axis, recall is the depth axis, and MCC is the vertical axis. Labels and the accompanying values identify the models without relying on perspective alone. This view brings three existing evaluation metrics together; it does not introduce a new ranking rule.
+
 ### Confusion matrices
 
 ![Five confusion matrices with actual classes on rows and predicted classes on columns](results/confusion_matrices.png)
 
 All panels share one color scale. The upper-right cell counts false purchase alerts; the lower-left cell counts missed buyers.
 
+### Confusion counts in three dimensions
+
+![Five three-dimensional confusion-matrix panels with labeled session counts](results/confusion_matrices_3d.png)
+
+Bar heights represent session counts, with the same vertical scale across all five models. The four outcomes retain consistent colors and exact count labels. The flat matrices and error-count table above remain available for direct numerical comparison.
+
 ### ROC curves
 
 ![ROC curves comparing purchase ranking across decision thresholds](results/roc_curves.png)
 
 The diagonal is the chance-ranking reference. ROC AUC evaluates ranking across thresholds; it does not describe precision at the default operating point.
+
+### Precision and recall across thresholds
+
+![Precision-recall curves and average precision for all five classifiers](results/precision_recall_curves.png)
+
+These curves show how purchase precision changes as more buyers are identified. The reference level is the purchase proportion in the held-out set. Average precision (AP) summarizes each curve as a supplementary measure for the minority purchase class; it does not replace ROC AUC or any of the six required metrics.
 
 ## 7. Reproduce the experiment
 
@@ -217,7 +237,7 @@ The source dataset is included, so a fresh clone does not depend on a separate d
 python scripts/verify_artifacts.py
 ```
 
-Verification reloads the saved pipelines and checks their results against the recorded experiment. The [validation workflow](.github/workflows/validate.yml) runs this check in GitHub Actions. The experiment manifest and data-quality report retain provenance and split information for inspection.
+Verification reloads the saved pipelines and checks their results against the recorded experiment. It also checks the notebook's formatted comparison table, embedded figures, and exported visual files. The [validation workflow](.github/workflows/validate.yml) runs this check in GitHub Actions. The experiment manifest and data-quality report retain provenance and split information for inspection.
 
 Serialized pipelines depend on their library versions. Use the pinned environment when loading the committed `.joblib` files. If dependencies change, regenerate the complete set of models and reports together; see scikit-learn's [model persistence guidance](https://scikit-learn.org/stable/model_persistence.html).
 
@@ -230,7 +250,7 @@ Serialized pipelines depend on their library versions. Use the pinned environmen
 | `requirements-dev.txt` | Notebook execution and editing dependencies |
 | `data/online_shoppers_intention.csv` | Original dataset for repeatable execution |
 | `data/README.md` | Dataset attribution, license, and checksum |
-| `model/Online_Shoppers_Model_Analysis.ipynb` | Executed analysis with all five model implementations |
+| `model/Online_Shoppers_Model_Analysis.ipynb` | Executed analysis with five models, formatted tables, seven charts, and model explanations |
 | `model/logistic_regression.joblib` | Fitted Logistic Regression pipeline |
 | `model/decision_tree.joblib` | Fitted Decision Tree pipeline |
 | `model/k_nearest_neighbors.joblib` | Fitted k-Nearest Neighbors pipeline |
@@ -239,12 +259,14 @@ Serialized pipelines depend on their library versions. Use the pinned environmen
 | `test_data.csv` | Shared labeled test set, including `Revenue` |
 | `results/model_comparison.csv` | Six evaluation metrics for every model |
 | `results/error_counts.csv` | Confusion-matrix counts for every model |
-| `results/*.png` | Four visual summaries embedded above |
+| `results/*.png` | Seven visual summaries, including two 3D views, embedded above |
 | `results/training_versions.txt` | Package versions recorded during execution |
 | `results/experiment_manifest.json` | Experiment provenance and artifact metadata |
 | `results/data_quality.json` | Data quality and partition-overlap information |
 | `scripts/run_analysis.py` | Entry point for rerunning the notebook and reports |
 | `scripts/build_report.py` | Builds supplementary tables and visual reports |
+| `scripts/notebook_visuals.py` | Shared styling and chart functions used by the notebook and exported reports |
+| `scripts/notebook_tables.py` | Consistent table images with expandable, selectable HTML values |
 | `scripts/verify_artifacts.py` | Checks saved models and reported results |
 | `.github/workflows/validate.yml` | Automated repository validation |
 | `.gitignore`, `.gitattributes` | Exclude local files and keep file handling consistent |

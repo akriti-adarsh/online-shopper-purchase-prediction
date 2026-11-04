@@ -1,6 +1,7 @@
 """Verify the published experiment without fitting any new classifiers."""
 
 from hashlib import sha256
+from html import unescape
 from importlib.metadata import version
 import json
 from pathlib import Path
@@ -46,7 +47,8 @@ CATEGORICAL = [
 ]
 FIGURES = [
     "class_balance.png", "model_comparison.png", "confusion_matrices.png",
-    "roc_curves.png",
+    "roc_curves.png", "model_landscape_3d.png", "confusion_matrices_3d.png",
+    "precision_recall_curves.png",
 ]
 
 
@@ -192,6 +194,27 @@ def check_notebook_and_figures():
     for cell in code_cells:
         require(cell.execution_count is not None, "Notebook contains an unexecuted code cell.")
         require(not any(output.output_type == "error" for output in cell.outputs), "Notebook contains an execution error.")
+    outputs = [output for cell in code_cells for output in cell.outputs]
+    for filename in FIGURES:
+        require(
+            any(
+                filename in cell.source
+                and any("image/png" in output.get("data", {}) for output in cell.outputs)
+                for cell in code_cells
+            ),
+            f"Notebook is missing the rendered chart output for {filename}.",
+        )
+    tables = [
+        output.get("data", {}).get("text/html", "")
+        for output in outputs
+        if "<table" in output.get("data", {}).get("text/html", "").lower()
+    ]
+    require(len(tables) >= 4, "Notebook is missing formatted data or evaluation tables.")
+    table_texts = [" ".join(unescape(re.sub(r"<[^>]+>", " ", table)).split()) for table in tables]
+    require(
+        any(all(label in table for label in [*MODELS, *METRICS]) for table in table_texts),
+        "Notebook must display all five model names and all six required metrics in one comparison table.",
+    )
     for filename in FIGURES:
         contents = (ROOT / "results" / filename).read_bytes()
         require(contents[:8] == b"\x89PNG\r\n\x1a\n", f"Invalid PNG: {filename}")
@@ -218,7 +241,10 @@ def main():
     check_models(train, features, actual)
     check_notebook_and_figures()
     check_document_links()
-    print("Verification passed: 5 models, 6 metrics each, exact holdout, executed notebook, and 4 figures.")
+    print(
+        "Verification passed: 5 models, 6 metrics each, exact holdout, "
+        f"executed notebook, formatted tables, and {len(FIGURES)} figures."
+    )
 
 
 if __name__ == "__main__":
