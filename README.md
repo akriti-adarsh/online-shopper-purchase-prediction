@@ -297,7 +297,7 @@ Serialized pipelines depend on their library versions. Use the pinned environmen
 
 ## 10. Shopper Signals application
 
-**Shopper Signals** is the Streamlit interface for exploring the five saved classifiers. Its four destinations—**Overview**, **Compare Models**, **Session Explorer**, and **About**—share the active dataset and selected model. The interface uses a warm paper palette, restrained chart colors, and a dark appearance with the same outcome meanings.
+**Shopper Signals** is the Streamlit interface for exploring the five saved classifiers. Its four destinations—**Overview**, **Compare Models**, **Session Explorer**, and **About**—share the active dataset and selected model. The interface uses bright cobalt, coral, and mint accents, crisp white surfaces, and a navy dark appearance with the same outcome meanings.
 
 The assignment explicitly requires Streamlit and deployment on Streamlit Community Cloud. The application therefore keeps `app.py` as its entry point and uses the existing Python pipelines directly. The notebook, split, fitted models, and published results remain the scientific reference.
 
@@ -335,10 +335,10 @@ The confusion matrix places **actual outcomes on rows** and **predicted outcomes
 
 | Outcome | Meaning | Visual meaning |
 |---|---|---|
-| True negative (TN) | No purchase occurred and none was predicted | Neutral ink |
-| False positive (FP) | A purchase was predicted, but none occurred | Mulberry |
-| False negative (FN) | A purchase occurred, but the model missed it | Ochre |
-| True positive (TP) | A purchase occurred and was identified | Forest olive |
+| True negative (TN) | No purchase occurred and none was predicted | Cobalt blue |
+| False positive (FP) | A purchase was predicted, but none occurred | Coral pink |
+| False negative (FN) | A purchase occurred, but the model missed it | Amber |
+| True positive (TP) | A purchase occurred and was identified | Emerald |
 
 Buyer coverage separates two questions: **recall** is the share of actual buyers identified, `TP / (TP + FN)`; **precision** is the share of purchase predictions that were correct, `TP / (TP + FP)`. The bars display their counts and denominators explicitly.
 
@@ -395,10 +395,10 @@ The specified palette's base text pairs were checked using relative luminance:
 
 | Text/background pair | Light contrast | Dark contrast |
 |---|---:|---:|
-| Main text on page | 14.35:1 | 15.20:1 |
-| Secondary text on page | 6.12:1 | 8.65:1 |
-| Action text on action background | 7.20:1 | 8.82:1 |
-| Highlight text on highlight background | 8.42:1 | 10.90:1 |
+| Main text on page | 14.88:1 | 17.43:1 |
+| Secondary text on page | 6.74:1 | 10.32:1 |
+| Action text on action background | 5.23:1 | 7.88:1 |
+| Highlight text on highlight background | 5.23:1 | 5.23:1 |
 
 These checks cover those exact color pairs. They do not establish contrast for every widget state, chart mark, or browser-rendered table. The [validation record](docs/validation.md) distinguishes completed browser and keyboard checks from the unverified 200% zoom and assistive-technology checks.
 

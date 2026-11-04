@@ -84,6 +84,8 @@ The taller mobile screenshot frames show more of the page. Normal mobile interac
 
 The exact base palette pairs were also checked using relative luminance. Main text, secondary text, action text, and highlight text all exceed a 4.5:1 contrast ratio in both appearances; the ratios are recorded in the [README](../README.md#appearance-and-accessibility). This calculation does not certify every widget state, chart mark, or dynamically rendered surface.
 
+The subsequent color refresh replaces the muted palette with cobalt, coral, mint, and amber on white or navy surfaces. All 14 existing chart tests passed for the refreshed colors. Text on outcome cells and coverage bars exceeds 4.5:1 in both appearances, and input borders exceed 3:1 against their panel surfaces. Desktop and mobile screenshots were refreshed after checking both themes; evaluation behavior and scientific artifacts are unchanged.
+
 ## Verification limits and remaining checks
 
 - **200% zoom: unverified.** The attempted keyboard zoom shortcut had no effect in the embedded browser. No zoom-pass claim is made; repeat the check in a browser with verifiable zoom controls.

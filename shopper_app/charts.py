@@ -14,33 +14,33 @@ from sklearn.metrics import (
 
 PALETTES = {
     "light": {
-        "paper": "#FAF5EB", "surface": "#FFFDF8", "text": "#27231F",
-        "muted": "#645B52", "grid": "#DDD3C4", "primary": "#943B29",
-        "highlight": "#B9C982", "bar": "#C8BBA6", "on_color": "#FFFDF8",
-        "identified": "#3E5C35", "missed": "#8A5A11",
-        "false_alerts": "#8A3E61", "non_buyers": "#4F514A",
+        "paper": "#F3F7FF", "surface": "#FFFFFF", "text": "#14213D",
+        "muted": "#465873", "grid": "#D5E1F5", "primary": "#245BFF",
+        "highlight": "#245BFF", "bar": "#A9C0FF", "on_color": "#FFFFFF",
+        "identified": "#047857", "missed": "#A54700",
+        "false_alerts": "#BB2450", "non_buyers": "#315CB2",
     },
     "dark": {
-        "paper": "#1B1A17", "surface": "#27251F", "text": "#F5EFE3",
-        "muted": "#BFB6A4", "grid": "#4B463A", "primary": "#FFA98D",
-        "highlight": "#D2E39A", "bar": "#8D826E", "on_color": "#1B1A17",
-        "identified": "#C1D99D", "missed": "#F0C379",
-        "false_alerts": "#E6A3C4", "non_buyers": "#C7C4B9",
+        "paper": "#0B1228", "surface": "#141F3B", "text": "#F4F8FF",
+        "muted": "#B2C2DF", "grid": "#334A71", "primary": "#8AABFF",
+        "highlight": "#315DF5", "bar": "#708DCE", "on_color": "#0B1734",
+        "identified": "#47E5B1", "missed": "#FFD166",
+        "false_alerts": "#FF7AA7", "non_buyers": "#9BB8FF",
     },
 }
 COLORS = {
-    "Logistic Regression": "#943B29",
-    "Decision Tree": "#4E663D",
-    "k-Nearest Neighbors": "#8A610A",
-    "Gaussian Naive Bayes": "#843F64",
-    "Support Vector Machine": "#61594F",
+    "Logistic Regression": "#245BFF",
+    "Decision Tree": "#008A65",
+    "k-Nearest Neighbors": "#DA5500",
+    "Gaussian Naive Bayes": "#D52968",
+    "Support Vector Machine": "#007FA3",
 }
 DARK_COLORS = {
-    "Logistic Regression": "#FFA98D",
-    "Decision Tree": "#B9CF87",
-    "k-Nearest Neighbors": "#EAC468",
-    "Gaussian Naive Bayes": "#E7A4C7",
-    "Support Vector Machine": "#BFB6A4",
+    "Logistic Regression": "#8AABFF",
+    "Decision Tree": "#45E5AF",
+    "k-Nearest Neighbors": "#FFB547",
+    "Gaussian Naive Bayes": "#FF7AA7",
+    "Support Vector Machine": "#5AD5E8",
 }
 SHORT_NAMES = {
     "Logistic Regression": "Logistic<br>regression",
